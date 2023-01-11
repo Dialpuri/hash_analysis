@@ -1,4 +1,4 @@
-# Probe Points
+# Hash Analysis
 
 This repository consists of a small program which is helpful for analysing where the electron density is most and least common from various PDB models. This work was initially started to improve the probe points that were in Nautilus (Cowtan 2014).
 
@@ -20,9 +20,9 @@ where X.X is your CCP4 version.
 To compile this, just simply run:
 
     make
-and the executable 'probe' should be created in the root directory of the project.
+and the executable 'hash_exec' should be created in the root directory of the project.
 
 To run the executable run:
 
-    ./probe
+    ./hash_exec
     
