@@ -1,6 +1,4 @@
 # nautilus makefile - Jordan Dialpuri Edit 12/10/22
-
-
 FLAGS = \
 -std=c++11 \
 -O2 \
@@ -9,7 +7,6 @@ FLAGS = \
 -fPIC \
 -ftemplate-depth-50 \
 -D_GLIBCXX_USE_CXX11_ABI=0
-
 
 LIBS = \
 -lccp4c \
