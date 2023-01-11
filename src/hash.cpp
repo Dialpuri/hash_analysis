@@ -1,399 +1,316 @@
-/
+//
 // Created by jordan on 12/14/22.
 //
 
-#include "probe.h"
+#include "hash.h"
 
-LibraryItem::LibraryItem(std::string pdb_code) : m_pdb_code(pdb_code) {
-        m_pdb_file_path = pdb_base_dir + pdb_code + ".pdb";
 
-        try {
-            clipper::MiniMol mol = load_pdb();
-            calculate_electron_density(mol);
-        }
-        catch (std::runtime_error) {
-            std::cout << pdb_code << " had an issue, skipping..." << std::endl;
-        }
+void Hasher::load(std::string file_path) {
+    clipper::CCP4MTZfile mtz;
+    mtz.set_column_label_mode( clipper::CCP4MTZfile::Legacy );
 
-//        dump_minimol(mol, "./debug/minimol_dump/", pdb_code);
-//        dump_electron_density("./debug/aligned_fragments/");
+    mtz.open_read(file_path);
+
+    clipper::HKL_info hkls;
+    hkls.init( mtz.spacegroup(), mtz.cell(), mtz.resolution(), true );
+
+    clipper::HKL_data<clipper::data32::F_sigF>  wrk_f ( hkls );
+    clipper::HKL_data<clipper::data32::F_phi>   fphi( hkls );
+
+    mtz.import_hkl_data( wrk_f ,"FP,SIGFP");
+    mtz.import_hkl_data( fphi,  "FWT,PHWT" );
+
+    mtz.close_read();
+
+    clipper::Spacegroup cspg = hkls.spacegroup();
+    clipper::Cell       cxtl = hkls.cell();
+    clipper::Grid_sampling grid( cspg, cxtl, hkls.resolution() );
+    clipper::Xmap<float>   xwrk( cspg, cxtl, grid );
+    xwrk.fft_from( fphi );
+
+    std::cout << std::endl;
+    std::cout << " Spgr " << hkls.spacegroup().symbol_xhm() << std::endl;
+    std::cout << hkls.cell().format() << std::endl;
+    std::cout << " Nref " << hkls.num_reflections() << " " << fphi.num_obs() << std::endl;
+
+    xmap = xwrk;
+
 }
 
-clipper::MiniMol LibraryItem::load_pdb() {
 
-    clipper::MMDBfile m_file;
-    clipper::MiniMol mol;
-    const int mmdbflags = ::mmdb::MMDBF_IgnoreBlankLines | ::mmdb::MMDBF_IgnoreDuplSeqNum | ::mmdb::MMDBF_IgnoreNonCoorPDBErrors | ::mmdb::MMDBF_IgnoreRemarks;
+void Hasher::slice(float slice_index) {
 
-    m_file.SetFlag(mmdbflags);
-    m_file.read_file(m_pdb_file_path);
-    m_file.import_minimol(mol);
-
-    if (mol.size() == 0) {
-        throw std::runtime_error("Mol.size() == 0");
-    }
-
-    clipper::MiniMol return_mol;
-
-    std::vector<std::string> search_atoms = {" C1'", " C2'", " C3'", " C4'", " C5'", " O3'", " O4'", " O5'", " P  "};
-
-    for (int chain = 0; chain < mol.size(); chain++) {
-//        clipper::MPolymer mp;
-        for (int residue = 0; residue < mol[chain].size(); residue++) {
-            if (
-                    mol[chain][residue].lookup(" C1'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" C2'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" C3'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" C4'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" C5'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" O3'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" O4'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" O5'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" P  ", clipper::MM::ANY) >= 0
-                ) {
-                int atom = mol[chain][residue].lookup( " C4'", clipper::MM::ANY );
-                if ( mol[chain][residue][atom].occupancy() > 0.01 && mol[chain][residue][atom].u_iso() < clipper::Util::b2u(100.0))  {
-
-                    clipper::MPolymer mp;
-                    clipper::MMonomer monomer;
-                    for (int atom_string_index = 0; atom_string_index < search_atoms.size(); atom_string_index++) {
-                        std::string atom_string = search_atoms[atom_string_index];
-                        monomer.insert(mol[chain][residue].find(atom_string));
-                    }
-                    monomer.set_id("A");
-                    monomer.set_type("?");
-
-//                  Center the monomer and add to the return_minimol
-                    clipper::Coord_orth origin( 0.0, 0.0, 0.0 );
-                    int number_of_atoms = monomer.size();
-
-                    for (int atom = 0; atom < number_of_atoms; atom++) {
-                        origin += monomer[atom].coord_orth();
-                    }
-
-                    origin = (-1.0 / number_of_atoms) * origin;
-                    clipper::RTop_orth rtop = clipper::RTop_orth(clipper::Mat33<>::identity(), origin);
-                    monomer.transform(rtop);
-                    mp.insert(monomer);
-                    return_mol.insert(mp);
-
-                }
-            }
-        }
-    }
-
-    return return_mol;
-}
-
-clipper::Cell LibraryItem::return_cell(clipper::MMonomer& monomer) {
-
-    float min_x = 1e20;
-    float min_y = 1e20;
-    float min_z = 1e20;
-    float max_x = -1e20;
-    float max_y = -1e20;
-    float max_z = -1e20;
-
-    for (int atom = 0; atom < monomer.size(); atom++) {
-        clipper::MAtom current_atom = monomer[atom];
-        float x = current_atom.coord_orth().x();
-        float y = current_atom.coord_orth().y();
-        float z = current_atom.coord_orth().z();
-
-        if (x < min_x) {
-            min_x = x;
-        }
-        if (y < min_y) {
-            min_y = y;
-        }
-        if (z < min_z) {
-            min_z = z;
-        }
-
-        if (x > max_x) {
-            max_x = x;
-        }
-        if (y > max_y) {
-            max_y = y;
-        }
-        if (z > max_z) {
-            max_z = z;
-        }
-    }
-
-    std::cout << min_x << " " << max_x << " " << min_y << " " << max_y << " " << min_z << " " << max_z << std::endl;
-
-    clipper::Cell_descr cell_description = clipper::Cell_descr(max_x-min_x+10, max_y-min_y+10, max_z-min_z+10);
-    return clipper::Cell(cell_description);
-}
-
-clipper::Coord_orth LibraryItem::calculate_center_point(std::vector<clipper::MAtom> &atoms) {
-
-    float center_x = 0.0f;
-    float center_y = 0.0f;
-    float center_z = 0.0f;
-
-    for (int i = 0; i < atoms.size(); i++) {
-        float x = atoms[i].coord_orth().x();
-        float y = atoms[i].coord_orth().y();
-        float z = atoms[i].coord_orth().z();
-
-        center_x = center_x + x;
-        center_y = center_y + y;
-        center_z = center_z + z;
-    }
-
-    float average_x = center_x/atoms.size();
-    float average_y = center_y/atoms.size();
-    float average_z = center_z/atoms.size();
-
-    clipper::Coord_orth return_coord = clipper::Coord_orth(average_x, average_y, average_z);
-    return return_coord;
-}
-
-clipper::RTop_orth LibraryItem::align_fragment(clipper::MMonomer &monomer) {
-
-//    ATOM      8  O5'   ?     0       1.070  -0.334   0.726  1.00 17.23           O
-//    ATOM      9  P     ?     0       0.593  -1.729   1.377  1.00 20.98           P
-//    ATOM      5  C5'   ?     0       2.318  -0.206   0.082  1.00 13.43           C
-
-    clipper::Coord_orth ref_o5 = clipper::Coord_orth(1.070,-0.334,0.726);
-    clipper::Coord_orth ref_p = clipper::Coord_orth(0.593, -1.729, 1.377);
-    clipper::Coord_orth ref_c5 = clipper::Coord_orth(2.318, -0.206, 0.082);
-
-    std::vector<clipper::Coord_orth> reference_coords = {ref_o5, ref_p, ref_c5};
-
-    clipper::Coord_orth target_o5 = monomer.find("O5'").coord_orth();
-    clipper::Coord_orth target_p = monomer.find("P").coord_orth();
-    clipper::Coord_orth target_c5 = monomer.find("C5'").coord_orth();
-
-    std::vector<clipper::Coord_orth> target_coords = {target_o5, target_p, target_c5};
-
-    clipper::RTop_orth rtop = clipper::RTop_orth(target_coords, reference_coords);
-
-    return rtop;
-}
-
-void LibraryItem::convert_map_to_array(clipper::Xmap<float> &xmap) {
-
-    clipper::Grid_sampling grid_sampling = xmap.grid_sampling();
-
-    const int nu = grid_sampling.nu();
-    const int nv = grid_sampling.nv();
-    const int nw = grid_sampling.nw();
-
-    std::vector<std::vector<std::vector<float>>> matrix;
-
-    clipper::Coord_orth base_coord_orth = clipper::Coord_orth(0,0,0);
-    clipper::Coord_grid base_coord = base_coord_orth.coord_frac(xmap.cell()).coord_grid(grid_sampling);
-    clipper::Xmap_base::Map_reference_coord i0 = clipper::Xmap_base::Map_reference_coord(xmap, base_coord);
-
-    clipper::Coord_orth end_coord_orth = clipper::Coord_orth(10,10,10);
-    clipper::Coord_grid end_coord = end_coord_orth.coord_frac(xmap.cell()).coord_grid(grid_sampling);
-    clipper::Xmap_base::Map_reference_coord iend = clipper::Xmap_base::Map_reference_coord(xmap, end_coord);
-
+    std::cout << "Slicing map with " << slice_index << std::endl;
 
     clipper::Xmap_base::Map_reference_coord iu, iv, iw;
-    for (iu = i0; iu.coord().u() <= iend.coord().u(); iu.next_u()) {
-        for (iv = iu; iv.coord().v() <= iend.coord().v(); iv.next_v()) {
+    clipper::Cell cell = xmap.cell();
+
+
+    clipper::Grid grid = clipper::Grid(cell.a(),cell.b(),cell.c());
+
+    clipper::Coord_orth base_coord_orth = clipper::Coord_orth(0,0,0);
+    clipper::Coord_grid base_coord = base_coord_orth.coord_frac(xmap.cell()).coord_grid(grid);
+    clipper::Xmap_base::Map_reference_coord i0 = clipper::Xmap_base::Map_reference_coord(xmap, base_coord);
+
+    std::cout  << cell.format() << std::endl;
+    std::cout << grid.format() << std::endl;
+
+//    clipper::Coord_orth end_coord_orth = clipper::Coord_orth(cell.a(),cell.b(),cell.c());
+//    clipper::Coord_grid end_coord = end_coord_orth.coord_frac(xmap.cell()).coord_grid(grid);
+
+//    std::cout << "END COORD - " << end_coord_orth.format() << std::endl;
+    clipper::Coord_grid end_coord = clipper::Coord_grid(cell.a(), cell.b(), cell.c());
+//    clipper::Xmap_base::Map_reference_coord test = clipper::Xmap_base::Map_reference_coord(xmap, x);
+
+    clipper::Xmap_base::Map_reference_coord iend = clipper::Xmap_base::Map_reference_coord(xmap, end_coord);
+
+    int nu = grid.nu();
+    int nv = grid.nv();
+
+//    std::cout << "Nu " << nu << " Nv " << nv << "\n";
+
+    for (int i = 0; i <= nu; i++) {
+        std::vector<float> i_list = {};
+        for (int j = 0; j <= nv; j++) {
+            i_list.push_back(0.0f);
+        }
+        m_grid_values.push_back(i_list);
+    }
+
+//    std::cout << "m_grid " << m_grid_values.size() << " " << m_grid_values[0].size() << std::endl;
+
+    int i_index = 0;
+    for (iu = i0; iu.coord().u() < iend.coord().u(); iu.next_u()) {
+        int j_index = 0;
+        for (iv = iu; iv.coord().v() < iend.coord().v(); iv.next_v()) {
+
+//            std::cout << iv.coord().u() << "/" << iend.coord().u() << " " << iv.coord().v() << "/" << iend.coord().v() << std::endl;
+
             for (iw = iv; iw.coord().w() <= iend.coord().w(); iw.next_w()) {
-
-            }
-        }
-    }
-
-
-}
-
-void LibraryItem::calculate_electron_density(clipper::MiniMol &test_mol) {
-
-    for(int n_polymer = 0; n_polymer < test_mol.size(); n_polymer++) {
-        for (int n_monomer = 0; n_monomer < test_mol[n_polymer].size(); n_monomer++) {
-
-            clipper::MMonomer tmp_monomer = test_mol[n_polymer][n_monomer];
-
-            clipper::RTop_orth alignment_rtop = align_fragment(tmp_monomer);
-
-            tmp_monomer.transform(alignment_rtop);
-
-            clipper::RTop_orth move_to_center = clipper::RTop_orth(clipper::Mat33<>::identity(), clipper::Vec3<>(10,10,10));
-            tmp_monomer.transform(move_to_center);
-
-            clipper::Atom_list atom_list = tmp_monomer.atom_list();
-            clipper::Cell_descr cell_descr = clipper::Cell_descr(20,20,20);
-            clipper::Cell cell = clipper::Cell(cell_descr);
-            clipper::Grid_sampling grid = clipper::Grid_sampling(10,10,10);
-
-            clipper::Spacegroup spacegroup = clipper::Spacegroup(clipper::Spacegroup::P1);
-
-            clipper::Xmap<float> xmap(spacegroup, cell, grid );
-
-            clipper::EDcalc_iso<float> ed_calc(2);
-            ed_calc(xmap, atom_list);
-
-            m_density.push_back(std::make_pair(tmp_monomer, xmap));
-        }
-    }
-
-}
-
-void LibraryItem::dump_minimol(clipper::MiniMol& output_model, std::string file_path, std::string file_name) {
-    clipper::MMDBfile m_file;
-    m_file.export_minimol(output_model);
-    std::string output_path = file_path + file_name + ".pdb";
-    m_file.write_file(output_path);
-}
-
-void LibraryItem::dump_electron_density(std::string path) {
-
-    for (int i = 0; i < m_density.size(); i++) {
-        std::pair<clipper::MMonomer, clipper::Xmap<float>> pair_ = m_density[i];
-        clipper::CCP4MAPfile map_out;
-        std::string output_path = path + "/maps/" +  m_pdb_code + "_map_" + std::to_string(i) + ".map";
-        map_out.open_write(output_path);
-        map_out.export_xmap(pair_.second);
-        map_out.close_write();
-
-        clipper::MMDBfile m_file;
-        std::string output_path_model = path + "/models/" + m_pdb_code + "_fragment_" + std::to_string(i) + ".pdb";
-        clipper::MPolymer mp;
-        mp.insert(pair_.first);
-        clipper::MiniMol mm;
-        mm.insert(mp);
-        m_file.export_minimol(mm);
-        m_file.write_file(output_path_model);
-    }
-
-}
-
-// LIBRARY CLASS IMPLEMENTATIONS
-
-Library::Library(std::string library_file_path) : m_library_path(library_file_path) {
-    m_library = read_library_item();
-
-//    for (LibraryItem library_item: m_library) {
-////        std::cout << m_library_path << std::endl;
-//        library_item.load_pdb();
-//    }
-}
-
-std::vector <LibraryItem> Library::read_library_item() {
-    std::vector <std::string> pdb_ids;
-
-    std::fstream file_stream;
-    file_stream.open(m_library_path, std::ios::in);
-
-    std::string line, word;
-    std::vector <std::string> row;
-    std::vector <std::vector<std::string>> file_content;
-
-    if (file_stream.is_open()) {
-        while (std::getline(file_stream, line)) {
-            std::stringstream str(line);
-
-            while (std::getline(str, word, ',')) {
-                row.push_back(word);
-                file_content.push_back(row);
-            }
-        }
-    } else {
-        std::cout << "There was an error when opening the library path" << std::endl;
-    }
-
-    std::vector <LibraryItem> return_list;
-
-    for (std::string pdb_code: row) {
-        std::cout << pdb_code << std::endl;
-        return_list.push_back(LibraryItem(pdb_code));
-    }
-
-    return return_list;
-
-}
-
-void Library::combine_density() {
-
-    clipper::Cell_descr cell_descr = clipper::Cell_descr(20,20,20);
-    clipper::Cell cell = clipper::Cell(cell_descr);
-    clipper::Grid_sampling grid = clipper::Grid_sampling(10,10,10);
-
-    clipper::Spacegroup spacegroup = clipper::Spacegroup(clipper::Spacegroup::P1);
-    clipper::Xmap<float> combined_xmap(spacegroup, cell, grid);
-
-    std::vector<std::vector<std::vector<std::pair<std::vector<int>,float>>>> array3d;
-
-    for (LibraryItem item: m_library) {
-        std::cout << item.pdb_base_dir << std::endl;
-        for (std::pair<clipper::MMonomer, clipper::Xmap<float>> pair_: item.m_density) {
-            combined_xmap += pair_.second;
-
-            clipper::Xmap<float> xmap = pair_.second;
-
-            clipper::Coord_orth base_coord_orth = clipper::Coord_orth(0,0,0);
-            clipper::Coord_grid base_coord = base_coord_orth.coord_frac(xmap.cell()).coord_grid(grid);
-            clipper::Xmap_base::Map_reference_coord i0 = clipper::Xmap_base::Map_reference_coord(xmap, base_coord);
-
-            clipper::Coord_orth end_coord_orth = clipper::Coord_orth(20,20,20);
-            clipper::Coord_grid end_coord = end_coord_orth.coord_frac(xmap.cell()).coord_grid(grid);
-            clipper::Xmap_base::Map_reference_coord iend = clipper::Xmap_base::Map_reference_coord(xmap, end_coord);
-
-
-            clipper::Xmap_base::Map_reference_coord iu, iv, iw;
-            for (iu = i0; iu.coord().u() <= iend.coord().u(); iu.next_u()) {
-
-                std::vector<std::vector<std::pair<std::vector<int>,float>>> array2d;
-
-                for (iv = iu; iv.coord().v() <= iend.coord().v(); iv.next_v()) {
-
-                    std::vector<std::pair<std::vector<int>,float>> array;
-
-                    for (iw = iv; iw.coord().w() <= iend.coord().w(); iw.next_w()) {
-//                        std::cout << xmap[iw] << std::endl;
-//                        std::cout << iw.coord().format() << std::endl;
-                        std::vector<int> coords = {iw.coord().u(), iw.coord().v(), iw.coord().w()};
-                        array.push_back(std::make_pair(coords, xmap[iw]));
-                    }
-
-                    array2d.push_back(array);
+                if (iw.coord().w() == slice_index) {
+                    SliceData data = SliceData(xmap[iw], iw.coord().u(), iw.coord().v(), iw.coord().w());
+                    m_slice.push_back(data);
+//                    std::cout << i_index << "/" << m_grid_values.size() << " " << j_index << "/" << m_grid_values[0].size() << std::endl;
+                    m_grid_values[i_index][j_index] = xmap[iw];
+                    break;
                 }
-
-                array3d.push_back(array2d);
             }
-
+            j_index++;
         }
+        i_index++;
     }
 
+    std::cout << "Finished slicing..." << std::endl;
+}
+
+void Hasher::dump_slice(std::string file_name) {
     std::ofstream output_csv ;
-    output_csv.open("./debug/aligned_fragments/array3d.csv");
+    output_csv.open(file_name);
 
-    for (auto i: array3d) {
-        for (auto j: i) {
-            for (auto k: j) {
-                output_csv << k.first[0] << " " << k.first[1] << " " << k.first[2] << " " << k.second << std::endl;
-            }
-
-        }
+    output_csv << "u,v,data\n";
+    for (SliceData data: m_slice) {
+        output_csv << data.u() << "," << data.v() << "," << data.data() << "\n";
     }
 
     output_csv.close();
-
-
-    clipper::CCP4MAPfile map_out;
-    std::string output_path = "./debug/aligned_fragments/combined_map.map";
-    map_out.open_write(output_path);
-    map_out.export_xmap(combined_xmap);
-    map_out.close_write();
-
 }
 
 
-int main() {
-    std::string library_path = "./data/rebuilt_filenames.txt";
-    Library lib = Library(library_path);
-    lib.combine_density();
+void Hasher::dump_slice(std::string file_name, std::vector<SliceData> data) {
 
-//    MapReader map;
-//    map._test();
+    std::cout << "Dumping " << file_name << "\n";
+
+    std::ofstream output_csv ;
+    output_csv.open(file_name);
+
+    output_csv << "u,v,data\n";
+    for (SliceData data: data) {
+        output_csv << data.u() << "," << data.v() << "," << data.data() << "\n";
+    }
+
+    output_csv.close();
+}
+
+float Hasher::gaussian_1d(float x,  float sigma) {
+    float kernel = (1 / (sigma * sqrt(2 * M_PI))) * (exp((-(pow(x,2)))/(2*(pow(sigma,2)))));
+    return kernel;
+}
+
+float Hasher::gaussian_2d(float x, float y,  float sigma) {
+    float kernel = (1 / (sigma * sqrt(2 * M_PI))) * (exp((-((pow(x,2)+(pow(y,2)))))/(2*(pow(sigma,2)))));
+    return kernel;
+}
+
+
+float Hasher::gaussian_3d(float x, float y, float z, float sigma) {
+    float kernel = (1 / (sigma * 2 * sqrt(2 * M_PI))) * (exp((-((pow(x,2)+(pow(y,2))+(pow(z,2)))))/(2*(pow(sigma,2)))));
+    return kernel;}
+
+
+
+Matrix Hasher::generate_gaussian_kernel(int sigma) {
+
+    std::cout << "Generating gaussian kernel with " << sigma << std::endl;
+    int matrix_dimension = 1;
+    Matrix kernel_matrix;
+
+    int index_i = 0;
+    for (int i = -matrix_dimension; i <= matrix_dimension; i++) {
+        int index_j = 0;
+        for (int j = -matrix_dimension; j <= matrix_dimension; j++) {
+            kernel_matrix.m_matrix[index_i][index_j] = gaussian_2d(i, j, sigma);
+            index_j++;
+        }
+        index_i++;
+    }
+
+    kernel_matrix.print();
+
+    return kernel_matrix;
+}
+
+float Hasher::convolute(Matrix& kernel, Matrix& base) {
+
+    float sum = 0.0f;
+
+    for (int i = 0; i < base.m_matrix.size(); i++) {
+        for (int j = 0; j < base.m_matrix[i].size(); j++) {
+            sum = sum + (base.m_matrix[i][j] * kernel.m_matrix[i][j]);
+        }
+    }
+
+    return sum;
+}
+
+std::vector<SliceData> Hasher::apply_gaussian(Matrix kernel) {
+
+    auto m_grid_values_out = m_grid_values;
+    std::vector<SliceData> m_grid_out;
+
+    for (int i = 0; i < m_grid_values.size(); i++) {
+        std::vector<float> grid = m_grid_values[i];
+        for (int j = 0; j < grid.size(); j++) {
+
+            int i_index = i;
+            int j_index = j;
+
+            Matrix grid;
+
+            int i_iter_pos = 1;
+            int i_iter_neg = -1;
+            int j_iter_pos = 1;
+            int j_iter_neg = -1;
+
+            if (i == m_grid_values.size() - 1) {
+                i_iter_pos = -(m_grid_values.size()-1);
+            }
+
+            if (j == m_grid_values[0].size() - 1) {
+                j_iter_pos = -(m_grid_values[0].size()-1);
+            }
+
+            if (i == 0) {
+                i_iter_neg = m_grid_values.size()-1;
+            }
+
+            if (j == 0) {
+                j_iter_neg = m_grid_values[0].size()-1;
+            }
+
+
+
+            grid.m_matrix[0][0] = m_grid_values[i_index + i_iter_neg][j_index + j_iter_neg];
+            grid.m_matrix[0][1] = m_grid_values[i_index + i_iter_neg][j_index];
+            grid.m_matrix[0][2] = m_grid_values[i_index + i_iter_neg][j_index + j_iter_pos];
+
+            grid.m_matrix[1][0] = m_grid_values[i_index][j_index + j_iter_neg];
+            grid.m_matrix[1][1] = m_grid_values[i_index][j_index];
+            grid.m_matrix[1][2] = m_grid_values[i_index][j_index + j_iter_pos];
+
+            grid.m_matrix[2][0] = m_grid_values[i_index + i_iter_pos][j_index + j_iter_neg];
+            grid.m_matrix[2][1] = m_grid_values[i_index + i_iter_pos][j_index];
+            grid.m_matrix[2][2] = m_grid_values[i_index + i_iter_pos][j_index + j_iter_pos];
+
+            float convolute_sum = convolute(kernel, grid);
+            m_grid_values_out[i][j] = convolute_sum;
+            m_grid_out.push_back(SliceData(convolute_sum, i, j, 0));
+
+        }
+    }
+
+    return m_grid_out;
+}
+
+std::vector<SliceData> Hasher::difference_of_gaussian(std::vector<SliceData>& top, std::vector<SliceData>& bottom) {
+
+    std::vector<SliceData> return_list;
+
+    for (int i = 0; i < top.size(); i++) {
+
+//        std::cout << i << std::endl;
+
+        for (int j = 0; j < bottom.size(); j++) {
+
+            SliceData top_slice = top[i];
+            SliceData bottom_slice = bottom[i];
+
+            if (top_slice.u() == bottom_slice.u() && top_slice.v() == bottom_slice.v()) {
+                SliceData difference = SliceData(top_slice.data()-bottom_slice.data(), top_slice.u(), top_slice.v(), 1);
+                return_list.push_back(difference);
+                break;
+            }
+        }
+    }
+
+    return return_list;
+}
+
+int main() {
+
+    std::cout << "Running" << std::endl;
+    Hasher hash;
+
+    auto s1 = std::chrono::high_resolution_clock::now();
+    hash.load("./data/1hr2_final.mtz");
+    auto e1 = std::chrono::high_resolution_clock::now();
+
+    std::vector<SliceData> data;
+
+    auto s2 = std::chrono::high_resolution_clock::now();
+    hash.slice(3);
+    auto e2 = std::chrono::high_resolution_clock::now();
+
+    hash.dump_slice("./debug/slice_data.csv");
+
+    auto s3 = std::chrono::high_resolution_clock::now();
+    Matrix kernel = hash.generate_gaussian_kernel(3);
+    auto e3 = std::chrono::high_resolution_clock::now();
+
+    auto s4 = std::chrono::high_resolution_clock::now();
+    std::vector<SliceData> blur_1 = hash.apply_gaussian(kernel);
+    auto e4 = std::chrono::high_resolution_clock::now();
+
+    hash.dump_slice("./debug/kernel1.csv", blur_1);
+
+    Matrix kernel_2 = hash.generate_gaussian_kernel(5);
+    std::vector<SliceData> blur_2 = hash.apply_gaussian(kernel_2);
+
+    hash.dump_slice("./debug/kernel2.csv", blur_2);
+
+    std::vector<SliceData> difference = hash.difference_of_gaussian(blur_1, blur_2);
+
+    hash.dump_slice("./debug/kerneldifference.csv", difference);
+
+    auto d1 = std::chrono::duration_cast<std::chrono::milliseconds>(e1-s1);
+    auto d2 = std::chrono::duration_cast<std::chrono::milliseconds>(e2-s2);
+    auto d3 = std::chrono::duration_cast<std::chrono::milliseconds>(e3-s3);
+    auto d4 = std::chrono::duration_cast<std::chrono::milliseconds>(e4-s4);
+
+    std::cout << "==Timings==\n" << "Loading " << d1.count() << "ms\n"
+            << "Slicing " << d2.count() << "ms\n"
+            << "Generating Kernel " << d3.count() << "ms\n"
+            << "Applying Kernel " << d4.count() << "ms" << std::endl;
+
 
     return 0;
 }
