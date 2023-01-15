@@ -1,6 +1,6 @@
 # Hash Analysis
 
-This repository consists of a small program which is helpful for analysing where the electron density is most and least common from various PDB models. This work was initially started to improve the probe points that were in Nautilus (Cowtan 2014).
+This repository consists of a small program which is a test for whether a hash based approach to electron density classification is viable. This work is part of a PhD project funded by the BBSRC. 
 
 ### Development
 
