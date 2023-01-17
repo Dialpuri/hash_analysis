@@ -26,3 +26,11 @@ To run the executable run:
 
     ./hash_exec
     
+#### Usage
+
+To create a slice of density and output it to a csv file. 
+
+    Density dens; 
+    dens.load_file("./path/to/file.mtz")
+    dens.slice(2);
+    dens.dump_slice("./path/to/output.csv");
