@@ -5,7 +5,7 @@
 #include "hash.h"
 
 
-void Hasher::load_file(std::string file_path) {
+void Density::load_file(std::string file_path) {
     clipper::CCP4MTZfile mtz;
     mtz.set_column_label_mode( clipper::CCP4MTZfile::Legacy );
 
@@ -38,7 +38,7 @@ void Hasher::load_file(std::string file_path) {
 }
 
 
-void Hasher::extract_data() {
+void Density::extract_data() {
 
     clipper::Xmap_base::Map_reference_coord iu, iv, iw;
     clipper::Cell cell = xmap.cell();
@@ -86,7 +86,7 @@ void Hasher::extract_data() {
 }
 
 
-void Hasher::slice(float slice_index) {
+void Density::slice(float slice_index) {
 
     std::cout << "Slicing map with " << slice_index << std::endl;
 
@@ -151,7 +151,7 @@ void Hasher::slice(float slice_index) {
     std::cout << "Finished slicing..." << std::endl;
 }
 
-void Hasher::dump_slice(std::string file_name) {
+void Density::dump_slice(std::string file_name) {
     std::ofstream output_csv ;
     output_csv.open(file_name);
 
@@ -164,7 +164,7 @@ void Hasher::dump_slice(std::string file_name) {
 }
 
 
-void Hasher::dump_slice(std::string file_name, std::vector<PixelData> data) {
+void Density::dump_slice(std::string file_name, std::vector<PixelData> data) {
 
     std::cout << "Dumping " << file_name << "\n";
 
@@ -179,25 +179,25 @@ void Hasher::dump_slice(std::string file_name, std::vector<PixelData> data) {
     output_csv.close();
 }
 
-float Hasher::gaussian_1d(float x,  float sigma) {
+float Density::gaussian_1d(float x, float sigma) {
     float kernel = (1 / (sigma * sqrt(2 * M_PI))) * (exp((-(pow(x,2)))/(2*(pow(sigma,2)))));
     return kernel;
 }
 
-float Hasher::gaussian_2d(float x, float y,  float sigma) {
+float Density::gaussian_2d(float x, float y, float sigma) {
     float kernel = (1 / (sigma * sqrt(2 * M_PI))) * (exp((-((pow(x,2)+(pow(y,2)))))/(2*(pow(sigma,2)))));
     return kernel;
 }
 
 
-float Hasher::gaussian_3d(float x, float y, float z, float sigma) {
+float Density::gaussian_3d(float x, float y, float z, float sigma) {
     float kernel = (1 / (sigma * 2 * sqrt(2 * M_PI))) * (exp((-((pow(x,2)+(pow(y,2))+(pow(z,2)))))/(2*(pow(sigma,2)))));
     return kernel;
 }
 
 
 
-Matrix_2D Hasher::generate_gaussian_kernel_2d(int sigma) {
+Matrix_2D Density::generate_gaussian_kernel_2d(int sigma) {
 
     std::cout << "Generating gaussian kernel with " << sigma << std::endl;
     int matrix_dimension = 1;
@@ -219,7 +219,7 @@ Matrix_2D Hasher::generate_gaussian_kernel_2d(int sigma) {
 }
 
 
-Matrix_3D Hasher::generate_gaussian_kernel_3d(int sigma, int matrix_size) {
+Matrix_3D Density::generate_gaussian_kernel_3d(int sigma, int matrix_size) {
 
     int matrix_dimension = 1;
     Matrix_3D kernel_matrix(matrix_size);
@@ -243,7 +243,7 @@ Matrix_3D Hasher::generate_gaussian_kernel_3d(int sigma, int matrix_size) {
 }
 
 
-float Hasher::convolute_2D(Matrix_2D& kernel, Matrix_2D& base) {
+float Density::convolute_2D(Matrix_2D& kernel, Matrix_2D& base) {
 
     float sum = 0.0f;
 
@@ -256,7 +256,7 @@ float Hasher::convolute_2D(Matrix_2D& kernel, Matrix_2D& base) {
     return sum;
 }
 
-std::vector<PixelData> Hasher::apply_gaussian_2d(Matrix_2D kernel) {
+std::vector<PixelData> Density::apply_gaussian_2d(Matrix_2D kernel) {
 
     auto m_grid_values_out = m_grid_values;
     std::vector<PixelData> m_grid_out;
@@ -291,8 +291,6 @@ std::vector<PixelData> Hasher::apply_gaussian_2d(Matrix_2D kernel) {
                 j_iter_neg = m_grid_values[0].size()-1;
             }
 
-
-
             grid.m_matrix[0][0] = m_grid_values[i_index + i_iter_neg][j_index + j_iter_neg];
             grid.m_matrix[0][1] = m_grid_values[i_index + i_iter_neg][j_index];
             grid.m_matrix[0][2] = m_grid_values[i_index + i_iter_neg][j_index + j_iter_pos];
@@ -316,10 +314,10 @@ std::vector<PixelData> Hasher::apply_gaussian_2d(Matrix_2D kernel) {
 }
 
 
-Hasher::PixelMap Hasher::apply_gaussian_3d(Matrix_3D kernel) {
+Density::PixelMap Density::apply_gaussian_3d(Matrix_3D kernel) {
 
 
-    Hasher::PixelMap blurred_pixels = Hasher::PixelMap(m_pixel_data);
+    Density::PixelMap blurred_pixels = Density::PixelMap(m_pixel_data);
 
     for (int u = 0; u < m_pixel_data.size(); u++) {
         for (int v = 0; v < m_pixel_data[u].size(); v++) {
@@ -416,7 +414,7 @@ Hasher::PixelMap Hasher::apply_gaussian_3d(Matrix_3D kernel) {
 }
 
 
-std::vector<PixelData> Hasher::difference_of_gaussian(std::vector<PixelData>& top, std::vector<PixelData>& bottom) {
+std::vector<PixelData> Density::difference_of_gaussian(std::vector<PixelData>& top, std::vector<PixelData>& bottom) {
 
     std::vector<PixelData> return_list;
 
@@ -440,7 +438,7 @@ std::vector<PixelData> Hasher::difference_of_gaussian(std::vector<PixelData>& to
     return return_list;
 }
 
-void Hasher::export_pixelmap(std::string file_name ) {
+void Density::export_pixelmap(std::string file_name ) {
 
     clipper::Xmap<float> map = clipper::Xmap<float>(m_spacegroup, m_cell, m_gridsampling);
 
@@ -460,7 +458,7 @@ void Hasher::export_pixelmap(std::string file_name ) {
 }
 
 
-void Hasher::export_pixelmap(std::string file_name, Hasher::PixelMap pixel_map) {
+void Density::export_pixelmap(std::string file_name, Density::PixelMap pixel_map) {
     clipper::Xmap<float> map = clipper::Xmap<float>(m_spacegroup, m_cell, m_gridsampling);
 
     for (int i = 0; i < pixel_map.size(); i++) {
@@ -479,17 +477,17 @@ void Hasher::export_pixelmap(std::string file_name, Hasher::PixelMap pixel_map) 
 }
 
 
-Hasher::PixelMap Hasher::difference_of_gaussian(Hasher::PixelMap &top, Hasher::PixelMap &bottom) {
+Density::PixelMap Density::difference_of_gaussian(Density::PixelMap &top, Density::PixelMap &bottom) {
 
     std::cout << "Computing DOG..." << std::endl;
 
-    Hasher::PixelMap difference = Hasher::PixelMap(top);
+    Density::PixelMap difference = Density::PixelMap(top);
 
     for (int i = 0; i < top.size(); i++) {
         for (int j = 0; j < top[i].size(); j++) {
             for (int k = 0; k < top[i][j].size(); k++) {
 
-                if (top[i][j][k].u() == bottom[i][j][k].u() & top[i][j][k].v() == bottom[i][j][k].v() & top[i][j][k].w() == bottom[i][j][k].w() ) {
+                if ((top[i][j][k].u() == bottom[i][j][k].u()) & (top[i][j][k].v() == bottom[i][j][k].v()) & (top[i][j][k].w() == bottom[i][j][k].w())) {
                     difference[i][j][k].m_data = top[i][j][k].m_data - bottom[i][j][k].m_data;
 //                    std::cout << "DOG: Us are the same\n";
                 }
@@ -505,30 +503,104 @@ Hasher::PixelMap Hasher::difference_of_gaussian(Hasher::PixelMap &top, Hasher::P
     return difference;
 }
 
+void Density::calculate_gradient(clipper::MMonomer sugar) {
+
+}
+
 
 int main() {
 
-    std::cout << "Running" << std::endl;
-    Hasher hash;
 
-    auto s1 = std::chrono::high_resolution_clock::now();
-    hash.load_file("./data/1hr2_phases.mtz");
-    auto e1 = std::chrono::high_resolution_clock::now();
+//    Model model;
+//    model.load_model("./data/1hr2.pdb");
 
-    hash.extract_data();
-    Matrix_3D kernel_3 = hash.generate_gaussian_kernel_3d(3, 3);
-    Hasher::PixelMap blurred_map_3 = hash.apply_gaussian_3d(kernel_3);
+//
+//
+//    std::cout << "Running" << std::endl;
+//    auto start = std::chrono::high_resolution_clock::now();
+//
+//    Density hash;
+//
+//    hash.load_file("./data/1hr2_phases.mtz");
+//    hash.slice(2);
+//    hash.dump_slice("./debug/original_slice.csv");
+//
+//    int max_sigma = 5;
+//
+//    for (int i = 0; i < max_sigma; i++) {
+//        for (int j = 0; j < max_sigma; )
+//    }
+//
+//
+//    Matrix_2D kernel_1 = hash.generate_gaussian_kernel_2d(1);
+//    std::vector<PixelData> hash_1 = hash.apply_gaussian_2d(kernel_1);
+//
+//    Matrix_2D kernel_2 = hash.generate_gaussian_kernel_2d(2);
+//    std::vector<PixelData> hash_2 = hash.apply_gaussian_2d(kernel_2);
+//
+//    hash.difference_of_gaussian(hash_1, hash_2);
 
-    Matrix_3D kernel_5 = hash.generate_gaussian_kernel_3d(8, 3);
-    Hasher::PixelMap blurred_map_5 = hash.apply_gaussian_3d(kernel_5);
-
-    Hasher::PixelMap difference = hash.difference_of_gaussian(blurred_map_3, blurred_map_5);
-
-    hash.export_pixelmap("./debug/blurred_map_5.map", blurred_map_5);
-    hash.export_pixelmap("./debug/blurred_map_3.map", blurred_map_3);
-    hash.export_pixelmap("./debug/1hr2_blurred_map_diff.map", difference);
-
-
+//
+//    auto s1 = std::chrono::high_resolution_clock::now();
+//    hash.load_file("./data/1hr2_phases.mtz");
+//    auto e1 = std::chrono::high_resolution_clock::now();
+//
+//    auto s2 = std::chrono::high_resolution_clock::now();
+//    hash.extract_data();
+//    auto e2 = std::chrono::high_resolution_clock::now();
+//
+//    auto s3 = std::chrono::high_resolution_clock::now();
+//    Matrix_3D kernel_3 = hash.generate_gaussian_kernel_3d(1, 3);
+//    auto e3 = std::chrono::high_resolution_clock::now();
+//
+//    auto s4 = std::chrono::high_resolution_clock::now();
+//    Density::PixelMap blurred_map_3 = hash.apply_gaussian_3d(kernel_3);
+//    auto e4 = std::chrono::high_resolution_clock::now();
+//
+//    auto s5 = std::chrono::high_resolution_clock::now();
+//    Matrix_3D kernel_5 = hash.generate_gaussian_kernel_3d(5, 3);
+//    auto e5 = std::chrono::high_resolution_clock::now();
+//
+//    auto s6 = std::chrono::high_resolution_clock::now();
+//    Density::PixelMap blurred_map_5 = hash.apply_gaussian_3d(kernel_5);
+//    auto e6 = std::chrono::high_resolution_clock::now();
+//
+//    auto s7 = std::chrono::high_resolution_clock::now();
+//    Density::PixelMap difference = hash.difference_of_gaussian(blurred_map_3, blurred_map_5);
+//    auto e7 = std::chrono::high_resolution_clock::now();
+//
+//    auto s8 = std::chrono::high_resolution_clock::now();
+//    hash.export_pixelmap("./debug/blurred_map_5.map", blurred_map_5);
+//    auto e8 = std::chrono::high_resolution_clock::now();
+//
+//    hash.export_pixelmap("./debug/blurred_map_3.map", blurred_map_3);
+//    hash.export_pixelmap("./debug/1hr2_blurred_map_diff.map", difference);
+//
+//    auto end = std::chrono::high_resolution_clock::now();
+//
+//
+//    auto d1 = std::chrono::duration_cast<std::chrono::milliseconds>(e1-s1);
+//    auto d2 = std::chrono::duration_cast<std::chrono::milliseconds>(e2-s2);
+//    auto d3 = std::chrono::duration_cast<std::chrono::milliseconds>(e3-s3);
+//    auto d4 = std::chrono::duration_cast<std::chrono::milliseconds>(e4-s4);
+//    auto d5 = std::chrono::duration_cast<std::chrono::milliseconds>(e5-s5);
+//    auto d6 = std::chrono::duration_cast<std::chrono::milliseconds>(e6-s6);
+//    auto d7 = std::chrono::duration_cast<std::chrono::milliseconds>(e7-s7);
+//    auto d8 = std::chrono::duration_cast<std::chrono::milliseconds>(e8-s8);
+//    auto total = std::chrono::duration_cast<std::chrono::milliseconds>(end-start);
+//
+//    std::cout << "== Timings ==\n"
+//        << "Loading file : " << d1.count() << "ms\n"
+//        << "Extracting Data : " << d2.count() << "ms\n"
+//        << "Generating Kernel sigma=3 : " << d3.count() << "ms\n"
+//        << "Applying Kernel 3 : " << d4.count() << "ms\n"
+//        << "Generating Kernel sigma=8 : " << d5.count() << "ms\n"
+//        << "Applying Kernel 8 : " << d6.count() << "ms\n"
+//        << "Calculaing DOG : " << d7.count() << "ms\n"
+//        << "Exporting Pixelmap : " << d8.count() << "ms\n"
+//        << "Total Time :   " << total.count() << "ms"
+//        << std::endl;
+//
 
     //
 //    std::vector<PixelData> data;
@@ -570,4 +642,101 @@ int main() {
 
 
     return 0;
+}
+
+void Model::load_model(std::string file_path) {
+    const int mmdbflags = ::mmdb::MMDBF_IgnoreBlankLines | ::mmdb::MMDBF_IgnoreDuplSeqNum | ::mmdb::MMDBF_IgnoreNonCoorPDBErrors | ::mmdb::MMDBF_IgnoreRemarks;
+    clipper::MMDBfile mfile;
+    clipper::MiniMol mol;
+    mfile.SetFlag( mmdbflags );
+    mfile.read_file( file_path );
+    mfile.import_minimol( mol );
+
+    if ( mol.size() == 0 ) return ;
+
+    for ( int c = 0; c < mol.size(); c++ ) {
+        clipper::MPolymer mp;
+        // select monomers by occupancy
+        for ( int r = 0; r < mol[c].size(); r++ ) {
+            if ( mol[c][r].lookup( " C1'", clipper::MM::ANY ) >= 0 &&
+                 mol[c][r].lookup( " C2'", clipper::MM::ANY ) >= 0 &&
+                 mol[c][r].lookup( " C3'", clipper::MM::ANY ) >= 0 &&
+                 mol[c][r].lookup( " C4'", clipper::MM::ANY ) >= 0 &&
+                 mol[c][r].lookup( " C5'", clipper::MM::ANY ) >= 0 &&
+                 mol[c][r].lookup( " O3'", clipper::MM::ANY ) >= 0 &&
+                 mol[c][r].lookup( " O4'", clipper::MM::ANY ) >= 0 &&
+                 mol[c][r].lookup( " O5'", clipper::MM::ANY ) >= 0 &&
+                 mol[c][r].lookup( " P  ", clipper::MM::ANY ) >= 0 ) {
+                int a = mol[c][r].lookup( " C4'", clipper::MM::ANY );
+                if ( mol[c][r][a].occupancy() > 0.01 &&
+                     mol[c][r][a].u_iso() < clipper::Util::b2u(100.0) )
+                    mp.insert( mol[c][r] );
+            }
+        }
+
+        m_model.insert(mp);
+    }
+}
+
+float Gradient::calculate_gradient(Density::PixelMap& image) {
+
+    for (int i = 0; i < image.size(); i++){
+        for (int j = 0; j < image[i].size(); j++){
+            for (int k = 0; k < image[i][j].size(); k++){
+                PixelData pixel = image[i][j][k];
+
+                int neg_probe_x = 0;
+                int neg_probe_y = 0;
+                int neg_probe_z = 0;
+
+                int pos_probe_x = 0;
+                int pos_probe_y = 0;
+                int pos_probe_z = 0;
+
+                if (i == 0) {
+                    neg_probe_x = image.size()-1;
+                    pos_probe_x = 1;
+                }
+
+                if (i == image.size()-1) {
+                    pos_probe_x = 0;
+                    neg_probe_x = image.size()-2;
+                }
+
+
+                if (j == 0) {
+                    neg_probe_y = image[i].size()-1;
+                    pos_probe_y = 1;
+                }
+
+                if (j == image[i].size()-1) {
+                    pos_probe_y = 0;
+                    neg_probe_y = image[i].size()-2;
+                }
+
+
+                if (k == 0) {
+                    neg_probe_z = image[i][k].size()-1;
+                    pos_probe_z = 1;
+                }
+
+                if (k == image[i][j].size()-1) {
+                    pos_probe_z = 0;
+                    neg_probe_z = image[i][k].size()-2;
+                }
+
+
+                float gradient_x = image[pos_probe_x][j][k].data() - image[neg_probe_x][j][k].data();
+                float gradient_y = image[i][pos_probe_y][k].data() - image[i][pos_probe_y][k].data();
+                float gradient_z = image[i][j][pos_probe_z].data() - image[i][j][pos_probe_z].data();
+
+                float magnitude = sqrt((pow(gradient_x, 2) + pow(gradient_y, 2) + pow(gradient_z, 2)));
+
+                float gxy_mag = sqrt((pow(gradient_x, 2) + pow(gradient_y, 2)));
+
+                float angle = atan((gradient_z/gxy_mag));
+
+            }
+        }
+    }
 }

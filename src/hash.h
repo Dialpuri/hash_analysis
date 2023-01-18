@@ -21,7 +21,7 @@ public:
 
     PixelData(float data, float u, float v, float w): m_data(data), m_u(u), m_v(v), m_w(w) {}
 
-    float set_data(float& data) {m_data = data;}
+    void set_data(float& data) {m_data = data;}
     float data() {return m_data;}
     float u() {return m_u;}
     float v() {return m_v;}
@@ -89,11 +89,12 @@ public:
 };
 
 
-class Hasher {
+class Density {
 
+    friend class Model;
 public:
     typedef std::vector<std::vector<std::vector<PixelData>>> PixelMap;
-    Hasher() {}
+    Density() {}
 
 //    LOADING FUNCTIONS
     void load_file(std::string file_path);
@@ -116,14 +117,15 @@ public:
     std::vector<PixelData> apply_gaussian_2d(Matrix_2D kernel);
     PixelMap apply_gaussian_3d(Matrix_3D kernel);
 
+//    GRADIENT CALCULATIONS
+    void calculate_gradient(clipper::MMonomer sugar);
+
     void export_pixelmap(std::string file_name);
     void export_pixelmap(std::string file_name, PixelMap pixel_map);
 
 
     std::vector<PixelData> difference_of_gaussian(std::vector<PixelData>& top, std::vector<PixelData>& bottom);
     PixelMap difference_of_gaussian(PixelMap& top, PixelMap& bottom);
-
-
 
 
 private:
@@ -138,6 +140,36 @@ private:
     clipper::Spacegroup m_spacegroup;
 
 };
+
+class Model {
+
+    friend class Density;
+
+public:
+    Model() {};
+
+    void load_model(std::string file_path);
+
+private:
+    clipper::MiniMol m_model;
+
+};
+
+class Gradient {
+public:
+    Gradient();
+
+    float calculate_gradient(Density::PixelMap& image);
+};
+
+class Block {
+public:
+    Block();
+
+
+};
+
+
 
 
 #endif //HASH_TEST_HASH_H
