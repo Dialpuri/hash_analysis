@@ -5,15 +5,15 @@
 #include "probe.h"
 
 LibraryItem::LibraryItem(std::string pdb_code) : m_pdb_code(pdb_code) {
-        m_pdb_file_path = pdb_base_dir + pdb_code + ".pdb";
+    m_pdb_file_path = pdb_base_dir + pdb_code + ".pdb";
 
-        try {
-            clipper::MiniMol mol = load_pdb();
-            calculate_electron_density(mol);
-        }
-        catch (std::runtime_error) {
-            std::cout << pdb_code << " had an issue, skipping..." << std::endl;
-        }
+    try {
+        clipper::MiniMol mol = load_pdb();
+        calculate_electron_density(mol);
+    }
+    catch (std::runtime_error& e) {
+        std::cout << pdb_code << " had an issue, skipping... - " << e.what() << std::endl;
+    }
 
 //        dump_minimol(mol, "./debug/minimol_dump/", pdb_code);
 //        dump_electron_density("./debug/aligned_fragments/");
@@ -30,7 +30,8 @@ clipper::MiniMol LibraryItem::load_pdb() {
     m_file.import_minimol(mol);
 
     if (mol.size() == 0) {
-        throw std::runtime_error("Mol.size() == 0");
+        return clipper::MiniMol();
+        throw std::runtime_error(m_pdb_code + " - Mol.size() == 0");
     }
 
     clipper::MiniMol return_mol;
@@ -50,7 +51,7 @@ clipper::MiniMol LibraryItem::load_pdb() {
                     mol[chain][residue].lookup(" O4'", clipper::MM::ANY) >= 0 &&
                     mol[chain][residue].lookup(" O5'", clipper::MM::ANY) >= 0 &&
                     mol[chain][residue].lookup(" P  ", clipper::MM::ANY) >= 0
-                ) {
+                    ) {
                 int atom = mol[chain][residue].lookup( " C4'", clipper::MM::ANY );
                 if ( mol[chain][residue][atom].occupancy() > 0.01 && mol[chain][residue][atom].u_iso() < clipper::Util::b2u(100.0))  {
 
@@ -121,7 +122,7 @@ clipper::Cell LibraryItem::return_cell(clipper::MMonomer& monomer) {
         }
     }
 
-    std::cout << min_x << " " << max_x << " " << min_y << " " << max_y << " " << min_z << " " << max_z << std::endl;
+//    std::cout << min_x << " " << max_x << " " << min_y << " " << max_y << " " << min_z << " " << max_z << std::endl;
 
     clipper::Cell_descr cell_description = clipper::Cell_descr(max_x-min_x+10, max_y-min_y+10, max_z-min_z+10);
     return clipper::Cell(cell_description);
@@ -178,9 +179,9 @@ void LibraryItem::convert_map_to_array(clipper::Xmap<float> &xmap) {
 
     clipper::Grid_sampling grid_sampling = xmap.grid_sampling();
 
-    const int nu = grid_sampling.nu();
-    const int nv = grid_sampling.nv();
-    const int nw = grid_sampling.nw();
+//    const int nu = grid_sampling.nu();
+//    const int nv = grid_sampling.nv();
+//    const int nw = grid_sampling.nw();
 
     std::vector<std::vector<std::vector<float>>> matrix;
 
@@ -226,10 +227,12 @@ void LibraryItem::calculate_electron_density(clipper::MiniMol &test_mol) {
 
             clipper::Spacegroup spacegroup = clipper::Spacegroup(clipper::Spacegroup::P1);
 
-            clipper::Xmap<float> xmap(spacegroup, cell, grid );
+            clipper::Xmap<float> xmap(spacegroup, cell, grid);
 
             clipper::EDcalc_iso<float> ed_calc(2);
             ed_calc(xmap, atom_list);
+
+//            std::cout << atom_list[0].coord_orth().format() << " " << xmap.get_data(atom_list[0].coord_orth().coord_frac(cell).coord_grid(grid)) << std::endl;
 
             m_density.push_back(std::make_pair(tmp_monomer, xmap));
         }
@@ -271,10 +274,11 @@ void LibraryItem::dump_electron_density(std::string path) {
 Library::Library(std::string library_file_path) : m_library_path(library_file_path) {
     m_library = read_library_item();
 
-//    for (LibraryItem library_item: m_library) {
-////        std::cout << m_library_path << std::endl;
-//        library_item.load_pdb();
-//    }
+    for (LibraryItem library_item: m_library) {
+//        std::cout << m_library_path << std::endl;
+        clipper::MiniMol mol = library_item.load_pdb();
+        library_item.calculate_electron_density(mol);
+    }
 }
 
 std::vector <LibraryItem> Library::read_library_item() {
@@ -303,7 +307,7 @@ std::vector <LibraryItem> Library::read_library_item() {
     std::vector <LibraryItem> return_list;
 
     for (std::string pdb_code: row) {
-        std::cout << pdb_code << std::endl;
+//        std::cout << pdb_code << std::endl;
         return_list.push_back(LibraryItem(pdb_code));
     }
 
@@ -377,7 +381,6 @@ void Library::combine_density() {
 
     output_csv.close();
 
-
     clipper::CCP4MAPfile map_out;
     std::string output_path = "./debug/aligned_fragments/combined_map.map";
     map_out.open_write(output_path);
@@ -387,13 +390,13 @@ void Library::combine_density() {
 }
 
 
-int main() {
-    std::string library_path = "./data/rebuilt_filenames.txt";
-    Library lib = Library(library_path);
-    lib.combine_density();
-
-//    MapReader map;
-//    map._test();
-
-    return 0;
-}
+//int main() {
+//    std::string library_path = "./data/rebuilt_filenames.txt";
+//    Library lib = Library(library_path);
+//    lib.combine_density();
+//
+////    MapReader map;
+////    map._test();
+//
+//    return 0;
+//}

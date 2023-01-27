@@ -38,11 +38,12 @@ void Density::load_file(std::string file_path) {
 }
 
 
-void Density::extract_data() {
+Density::PixelMap Density::extract_data(clipper::Xmap<float> xmap) {
 
     clipper::Xmap_base::Map_reference_coord iu, iv, iw;
     clipper::Cell cell = xmap.cell();
 
+//    std::cout << "CELL : " << cell.format() << std::endl;
 
     clipper::Grid grid = clipper::Grid(cell.a(),cell.b(),cell.c());
 
@@ -54,8 +55,11 @@ void Density::extract_data() {
     clipper::Coord_grid base_coord = base_coord_orth.coord_frac(xmap.cell()).coord_grid(grid);
     clipper::Xmap_base::Map_reference_coord i0 = clipper::Xmap_base::Map_reference_coord(xmap, base_coord);
 
-    clipper::Coord_grid end_coord = clipper::Coord_grid(cell.a(), cell.b(), cell.c());
+    clipper::Coord_grid end_coord = clipper::Coord_grid(m_gridsampling.nu(), m_gridsampling.nv(), m_gridsampling.nw());
     clipper::Xmap_base::Map_reference_coord iend = clipper::Xmap_base::Map_reference_coord(xmap, end_coord);
+
+
+    PixelMap return_map;
 
     for (iu = i0; iu.coord().u() < iend.coord().u(); iu.next_u()) {
 
@@ -67,22 +71,32 @@ void Density::extract_data() {
 
             for (iw = iv; iw.coord().w() < iend.coord().w(); iw.next_w()) {
 
+                float xmap_value = xmap[iw];
 
-                tertiary_list.push_back(PixelData(xmap[iw], iw.coord().u(), iw.coord().v(), iw.coord().w()));
+                if (xmap[iw] == 0) {
+//                    std::cout << xmap[iw] << std::endl;
+//                    xmap_value = 0.01;
+                    xmap_value = (((float) rand() / (RAND_MAX)) + 1)/10;
+                }
+//                else {
+//                    std::cout << xmap[iw] << std::endl;
+//                }
 
-//                std::cout << iw.coord().format() << xmap[iw] << std::endl;
+                tertiary_list.push_back(PixelData(xmap_value, iw.coord().u(), iw.coord().v(), iw.coord().w(), iw.coord_orth().x(), iw.coord_orth().y(), iw.coord_orth().z()));
 
+                std::cout << iw.coord().format() << " " << xmap[iw] << std::endl;
             }
-
             secondary_list.push_back(tertiary_list);
         }
 
         m_pixel_data.push_back(secondary_list);
+        return_map.push_back(secondary_list);
     }
 
 
     std::cout << "Size of m_pixel_data ~ "<< m_pixel_data.size() << " " << m_pixel_data[0].size() << " " << m_pixel_data[0][0].size() << std::endl;
 
+    return return_map;
 }
 
 
@@ -92,7 +106,6 @@ void Density::slice(float slice_index) {
 
     clipper::Xmap_base::Map_reference_coord iu, iv, iw;
     clipper::Cell cell = xmap.cell();
-
 
     clipper::Grid grid = clipper::Grid(cell.a(),cell.b(),cell.c());
 
@@ -137,6 +150,7 @@ void Density::slice(float slice_index) {
             for (iw = iv; iw.coord().w() <= iend.coord().w(); iw.next_w()) {
                 if (iw.coord().w() == slice_index) {
                     PixelData data = PixelData(xmap[iw], iw.coord().u(), iw.coord().v(), iw.coord().w());
+                    data.xmap_ptr = &xmap;
                     m_slice.push_back(data);
 //                    std::cout << i_index << "/" << m_grid_values.size() << " " << j_index << "/" << m_grid_values[0].size() << std::endl;
                     m_grid_values[i_index][j_index] = xmap[iw];
@@ -503,12 +517,82 @@ Density::PixelMap Density::difference_of_gaussian(Density::PixelMap &top, Densit
     return difference;
 }
 
-void Density::calculate_gradient(clipper::MMonomer sugar) {
-
-}
-
 
 int main() {
+
+
+    std::cout << "Main function called" << std::endl;
+//
+//    Density dens;
+//    dens.load_file("./data/1hr2_phases.mtz");
+//    dens.extract_data();
+
+    std::string library_path = "./data/rebuilt_filenames.txt";
+    Library lib = Library(library_path);
+
+    for (LibraryItem library_item: lib.m_library) {
+        for (int i = 0; i < library_item.m_density.size(); i++) {
+
+            std::pair<clipper::MMonomer, clipper::Xmap<float>> sugars = library_item.m_density[i];
+
+            Density dens;
+
+            Density::PixelMap map = dens.extract_data(sugars.second);
+//            Matrix_3D kernel = dens.generate_gaussian_kernel_3d(1, 3);
+//            Density::PixelMap map = dens.apply_gaussian_3d(kernel);
+
+//            for (auto x : map) {
+//                for (auto y : x) {
+//                    for (auto z: y) {
+//                        std::cout << z.u() << " " << z.v() << " " << z.w() << " " << z.data() << std::endl;
+//                    }
+//                }
+//            }
+
+//            std::cout << "Pixelmap " << map[0][0][0].data();
+
+            clipper::MiniMol monomer_model;
+            clipper::MPolymer m_polymer;
+
+            m_polymer.insert(sugars.first);
+            monomer_model.insert(m_polymer);
+
+            Model model(sugars.second);
+            model.m_model = monomer_model;
+
+            Gradient grad(map);
+//            grad.calculate_gradient();
+            Gradient::Block_list blocks = grad.calculate_histograms(model, sugars.second);
+
+            std::string file_name = library_item.get_pdb_code() + "-SI_" + std::to_string(i);
+            grad.write_histogram_data(blocks, file_name);
+
+//            std::cout << sugars.second.cell().format() << std::endl;
+        }
+
+    }
+    
+
+//    Matrix_3D kernel = dens.generate_gaussian_kernel_3d(1, 3);
+//
+//    Density::PixelMap map = dens.apply_gaussian_3d(kernel);
+//
+//    Gradient gradient(map);
+//    gradient.calculate_gradient();
+//    Gradient::Blocks blocks = gradient.transform_to_blocks();
+//    gradient.calculate_histograms(blocks);
+
+//    Model model(dens.xmap);
+//    model.load_model("./data/1hr2.pdb");
+//    model.prepare_sugars();
+
+
+//    Gradient::Block_list blocks = gradient.calculate_histograms(model, dens);
+
+//    std::cout << blocks[0].histogram.size() << std::endl;
+
+//    gradient.write_histogram_data(blocks, "./debug/");
+
 
 
 //    Model model;
@@ -642,101 +726,4 @@ int main() {
 
 
     return 0;
-}
-
-void Model::load_model(std::string file_path) {
-    const int mmdbflags = ::mmdb::MMDBF_IgnoreBlankLines | ::mmdb::MMDBF_IgnoreDuplSeqNum | ::mmdb::MMDBF_IgnoreNonCoorPDBErrors | ::mmdb::MMDBF_IgnoreRemarks;
-    clipper::MMDBfile mfile;
-    clipper::MiniMol mol;
-    mfile.SetFlag( mmdbflags );
-    mfile.read_file( file_path );
-    mfile.import_minimol( mol );
-
-    if ( mol.size() == 0 ) return ;
-
-    for ( int c = 0; c < mol.size(); c++ ) {
-        clipper::MPolymer mp;
-        // select monomers by occupancy
-        for ( int r = 0; r < mol[c].size(); r++ ) {
-            if ( mol[c][r].lookup( " C1'", clipper::MM::ANY ) >= 0 &&
-                 mol[c][r].lookup( " C2'", clipper::MM::ANY ) >= 0 &&
-                 mol[c][r].lookup( " C3'", clipper::MM::ANY ) >= 0 &&
-                 mol[c][r].lookup( " C4'", clipper::MM::ANY ) >= 0 &&
-                 mol[c][r].lookup( " C5'", clipper::MM::ANY ) >= 0 &&
-                 mol[c][r].lookup( " O3'", clipper::MM::ANY ) >= 0 &&
-                 mol[c][r].lookup( " O4'", clipper::MM::ANY ) >= 0 &&
-                 mol[c][r].lookup( " O5'", clipper::MM::ANY ) >= 0 &&
-                 mol[c][r].lookup( " P  ", clipper::MM::ANY ) >= 0 ) {
-                int a = mol[c][r].lookup( " C4'", clipper::MM::ANY );
-                if ( mol[c][r][a].occupancy() > 0.01 &&
-                     mol[c][r][a].u_iso() < clipper::Util::b2u(100.0) )
-                    mp.insert( mol[c][r] );
-            }
-        }
-
-        m_model.insert(mp);
-    }
-}
-
-float Gradient::calculate_gradient(Density::PixelMap& image) {
-
-    for (int i = 0; i < image.size(); i++){
-        for (int j = 0; j < image[i].size(); j++){
-            for (int k = 0; k < image[i][j].size(); k++){
-                PixelData pixel = image[i][j][k];
-
-                int neg_probe_x = 0;
-                int neg_probe_y = 0;
-                int neg_probe_z = 0;
-
-                int pos_probe_x = 0;
-                int pos_probe_y = 0;
-                int pos_probe_z = 0;
-
-                if (i == 0) {
-                    neg_probe_x = image.size()-1;
-                    pos_probe_x = 1;
-                }
-
-                if (i == image.size()-1) {
-                    pos_probe_x = 0;
-                    neg_probe_x = image.size()-2;
-                }
-
-
-                if (j == 0) {
-                    neg_probe_y = image[i].size()-1;
-                    pos_probe_y = 1;
-                }
-
-                if (j == image[i].size()-1) {
-                    pos_probe_y = 0;
-                    neg_probe_y = image[i].size()-2;
-                }
-
-
-                if (k == 0) {
-                    neg_probe_z = image[i][k].size()-1;
-                    pos_probe_z = 1;
-                }
-
-                if (k == image[i][j].size()-1) {
-                    pos_probe_z = 0;
-                    neg_probe_z = image[i][k].size()-2;
-                }
-
-
-                float gradient_x = image[pos_probe_x][j][k].data() - image[neg_probe_x][j][k].data();
-                float gradient_y = image[i][pos_probe_y][k].data() - image[i][pos_probe_y][k].data();
-                float gradient_z = image[i][j][pos_probe_z].data() - image[i][j][pos_probe_z].data();
-
-                float magnitude = sqrt((pow(gradient_x, 2) + pow(gradient_y, 2) + pow(gradient_z, 2)));
-
-                float gxy_mag = sqrt((pow(gradient_x, 2) + pow(gradient_y, 2)));
-
-                float angle = atan((gradient_z/gxy_mag));
-
-            }
-        }
-    }
 }

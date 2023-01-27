@@ -5,10 +5,10 @@
 #include <iostream>
 #include <string>
 #include <fstream>
-#include <clipper/clipper-ccp4.h>
-#include <clipper/clipper-contrib.h>
-#include <clipper/clipper-minimol.h>
-#include <clipper/core/container_map.h>
+#include "/opt/xtal/ccp4-8.0/include/clipper/clipper-ccp4.h"
+#include "/opt/xtal/ccp4-8.0/include/clipper/clipper-contrib.h"
+#include "/opt/xtal/ccp4-8.0/include/clipper/clipper-minimol.h"
+#include "/opt/xtal/ccp4-8.0/include/clipper/core/container_map.h"
 
 #include <stdexcept>
 #include <array>
@@ -37,6 +37,8 @@ public:
     void dump_electron_density(std::string path);
     std::vector<std::pair<clipper::MMonomer, clipper::Xmap<float>>> m_density;
 
+    std::string get_pdb_code() {return m_pdb_code;}
+
 private:
     std::string m_pdb_code;
     std::string m_pdb_file_path;
@@ -50,18 +52,10 @@ public:
     std::vector <LibraryItem> read_library_item();
 
     void combine_density();
+    std::vector <LibraryItem> m_library;
 
 private:
-    std::vector <LibraryItem> m_library;
     std::string m_library_path;
 };
-
-class MapReader {
-public:
-    MapReader();
-
-    void _test();
-};
-
 
 #endif //PROBE_POINTS_PROBE_H

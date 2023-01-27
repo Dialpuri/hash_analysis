@@ -8,9 +8,18 @@
 #include <array>
 #include <chrono>
 #include <cmath>
-#include <clipper/clipper-contrib.h>
-#include <clipper/clipper-ccp4.h>
-#include <clipper/clipper-minimol.h>
+#include "/opt/xtal/ccp4-8.0/include/clipper/clipper-contrib.h"
+#include "/opt/xtal/ccp4-8.0/include/clipper/clipper-minimol.h"
+#include "/opt/xtal/ccp4-8.0/include/clipper/clipper-ccp4.h"
+#include "gradient.h"
+#include "model.h"
+#include "probe.h"
+
+//#include <clipper/clipper-contrib.h>
+//#include <clipper/clipper-ccp4.h>
+//#include <clipper/clipper-minimol.h>
+#include <vector>
+#include <iostream>
 
 
 #ifndef HASH_TEST_HASH_H
@@ -19,24 +28,45 @@
 class PixelData {
 public:
 
+    PixelData();
     PixelData(float data, float u, float v, float w): m_data(data), m_u(u), m_v(v), m_w(w) {}
+    PixelData(float data, float u, float v, float w, float x, float y, float z): m_data(data), m_u(u), m_v(v), m_w(w), m_x(x), m_y(y), m_z(z) {}
 
     void set_data(float& data) {m_data = data;}
     float data() {return m_data;}
     float u() {return m_u;}
     float v() {return m_v;}
     float w() {return m_w;}
+    void set_u(float u) { m_u = u;}
+    void set_v(float v) { m_v = v;}
+    void set_w(float w) { m_w = w;}
+
+    void set_x(float x) { m_x = x;}
+    void set_y(float y) { m_y = y;}
+    void set_z(float z) { m_z = z;}
 
     void print() {
         std::cout << m_u << " " << m_v << " " << m_w << " " << m_data << std::endl;
     };
 
+    clipper::Xmap<float>* xmap_ptr;
     float m_data = 0.0f;
 private:
     float m_u = 0.0f;
     float m_v = 0.0f;
     float m_w = 0.0f;
+    float m_x = 0.0f;
+    float m_y = 0.0f;
+    float m_z = 0.0f;
 };
+
+struct GradientData {
+    float m_angle = 0.0f;
+    float m_magnitude = 0.00f;
+    float m_theta = 0.0f;
+    float m_psi = 0.0f;
+};
+
 
 class Matrix_2D {
 public:
@@ -91,14 +121,17 @@ public:
 
 class Density {
 
-    friend class Model;
 public:
+
+    friend class Model;
+    friend class Gradient;
     typedef std::vector<std::vector<std::vector<PixelData>>> PixelMap;
     Density() {}
 
+
 //    LOADING FUNCTIONS
     void load_file(std::string file_path);
-    void extract_data();
+    PixelMap extract_data(clipper::Xmap<float> xmap);
 
 //    SLICING FUNCTIONS
     void slice(float slice_index);
@@ -127,9 +160,10 @@ public:
     std::vector<PixelData> difference_of_gaussian(std::vector<PixelData>& top, std::vector<PixelData>& bottom);
     PixelMap difference_of_gaussian(PixelMap& top, PixelMap& bottom);
 
+    void set_xmap(clipper::Xmap<float>& xmap_in) {xmap = xmap_in; }
+    clipper::Xmap<float> xmap;
 
 private:
-    clipper::Xmap<float> xmap;
     std::vector<PixelData> m_slice;
     std::vector<std::vector<float>> m_grid_values;
     std::vector<std::vector<std::vector<float>>> m_grid_values_3d;
@@ -141,35 +175,22 @@ private:
 
 };
 
-class Model {
-
-    friend class Density;
-
-public:
-    Model() {};
-
-    void load_model(std::string file_path);
-
-private:
-    clipper::MiniMol m_model;
-
-};
-
-class Gradient {
-public:
-    Gradient();
-
-    float calculate_gradient(Density::PixelMap& image);
-};
 
 class Block {
+
 public:
-    Block();
+    std::array<std::array<std::array<GradientData, 8>, 8>, 18> m_data;
+
+    int i, j, k;
+    bool overflowing = false;
+
+    std::vector<std::pair<int, float>> m_theta_histogram;
+    std::vector<std::pair<int, float>> m_psi_histogram;
+    std::vector<std::pair<int, float>> histogram;
+
+
 
 
 };
-
-
-
 
 #endif //HASH_TEST_HASH_H
