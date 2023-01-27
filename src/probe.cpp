@@ -162,7 +162,12 @@ clipper::RTop_orth LibraryItem::align_fragment(clipper::MMonomer &monomer) {
     clipper::Coord_orth ref_p = clipper::Coord_orth(0.593, -1.729, 1.377);
     clipper::Coord_orth ref_c5 = clipper::Coord_orth(2.318, -0.206, 0.082);
 
-    std::vector<clipper::Coord_orth> reference_coords = {ref_o5, ref_p, ref_c5};
+    clipper::Coord_orth move = clipper::Coord_orth(10,10,9);
+    clipper::Coord_orth ref_o5_moved = ref_o5 + move;
+    clipper::Coord_orth ref_p_moved = ref_p + move;
+    clipper::Coord_orth ref_c5_moved = ref_c5 + move;
+
+    std::vector<clipper::Coord_orth> reference_coords = {ref_o5_moved, ref_p_moved, ref_c5_moved};
 
     clipper::Coord_orth target_o5 = monomer.find("O5'").coord_orth();
     clipper::Coord_orth target_p = monomer.find("P").coord_orth();

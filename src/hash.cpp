@@ -527,50 +527,39 @@ int main() {
 //    dens.load_file("./data/1hr2_phases.mtz");
 //    dens.extract_data();
 
-    std::string library_path = "./data/rebuilt_filenames.txt";
-    Library lib = Library(library_path);
-
-    for (LibraryItem library_item: lib.m_library) {
-        for (int i = 0; i < library_item.m_density.size(); i++) {
-
-            std::pair<clipper::MMonomer, clipper::Xmap<float>> sugars = library_item.m_density[i];
-
-            Density dens;
-
-            Density::PixelMap map = dens.extract_data(sugars.second);
-//            Matrix_3D kernel = dens.generate_gaussian_kernel_3d(1, 3);
-//            Density::PixelMap map = dens.apply_gaussian_3d(kernel);
-
-//            for (auto x : map) {
-//                for (auto y : x) {
-//                    for (auto z: y) {
-//                        std::cout << z.u() << " " << z.v() << " " << z.w() << " " << z.data() << std::endl;
-//                    }
-//                }
-//            }
-
-//            std::cout << "Pixelmap " << map[0][0][0].data();
-
-            clipper::MiniMol monomer_model;
-            clipper::MPolymer m_polymer;
-
-            m_polymer.insert(sugars.first);
-            monomer_model.insert(m_polymer);
-
-            Model model(sugars.second);
-            model.m_model = monomer_model;
-
-            Gradient grad(map);
-//            grad.calculate_gradient();
-            Gradient::Block_list blocks = grad.calculate_histograms(model, sugars.second);
-
-            std::string file_name = library_item.get_pdb_code() + "-SI_" + std::to_string(i);
-            grad.write_histogram_data(blocks, file_name);
-
-//            std::cout << sugars.second.cell().format() << std::endl;
-        }
-
-    }
+//// CODE TO RUN LIBRARY ANALYSIS AND GENERATE HoG DATASET
+//    std::string library_path = "./data/rebuilt_filenames.txt";
+//    Library lib = Library(library_path);
+//
+//    for (LibraryItem library_item: lib.m_library) {
+//        for (int i = 0; i < library_item.m_density.size(); i++) {
+//
+//            std::pair<clipper::MMonomer, clipper::Xmap<float>> sugars = library_item.m_density[i];
+//
+//            Density dens;
+//
+//            Density::PixelMap map = dens.extract_data(sugars.second);
+//
+//            clipper::MiniMol monomer_model;
+//            clipper::MPolymer m_polymer;
+//
+//            m_polymer.insert(sugars.first);
+//            monomer_model.insert(m_polymer);
+//
+//            Model model(sugars.second);
+//            model.m_model = monomer_model;
+//
+//            Gradient grad(map);
+////            grad.calculate_gradient();
+//            Gradient::Block_list blocks = grad.calculate_histograms(model, sugars.second);
+//
+//            std::string file_name = library_item.get_pdb_code() + "_SI_" + std::to_string(i) + "_";
+//            grad.write_histogram_data(blocks, file_name, std::string("./debug/histogram_data/"));
+//
+//        }
+//
+//    }
+//// END
     
 
 //    Matrix_3D kernel = dens.generate_gaussian_kernel_3d(1, 3);

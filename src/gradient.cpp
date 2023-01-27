@@ -307,8 +307,8 @@ Gradient::Block_list Gradient::calculate_histograms(Model &model, clipper::Xmap<
             int lower_v = center_v - 4;
             int upper_v = center_v + 4;
 
-            int lower_w = center_w - 9;
-            int upper_w = center_w + 9;
+            int lower_w = center_w - 4;
+            int upper_w = center_w + 4;
 
 //            std::cout << "Center coords = " << center_u << " " << center_v << " " << center_w << std::endl;
 
@@ -328,12 +328,7 @@ Gradient::Block_list Gradient::calculate_histograms(Model &model, clipper::Xmap<
                     int local_map_w = 0;
                     for (int local_w = lower_w; local_w < upper_w; local_w++) {
 
-                        GradientData gradient_data = calculate_gradient_data(nu, nv, nw, local_u, local_v, local_w);
-
-                        std::cout << gradient_data.m_psi << std::endl;
-
-                        block.m_data[local_map_u][local_map_v][local_map_w] = gradient_data;
-
+                        block.m_data[local_map_u][local_map_v][local_map_w] = calculate_gradient_data(nu, nv, nw, local_u, local_v, local_w);
                         local_map_w++;
                     }
                     local_map_v++;
@@ -342,7 +337,6 @@ Gradient::Block_list Gradient::calculate_histograms(Model &model, clipper::Xmap<
             }
             blocks.push_back(block);
         }
-
 //        output_minimol.insert(output_polymer);
     }
 
@@ -360,7 +354,7 @@ Gradient::Block_list Gradient::calculate_histograms(Model &model, clipper::Xmap<
         for (auto i: blocks[block_index].m_data) {
             for (auto j: i) {
                 for (auto k: j) {
-                    std::cout << k.m_magnitude << " " << k.m_theta << " " << k.m_psi << std::endl;
+//                    std::cout << k.m_magnitude << " " << k.m_theta << " " << k.m_psi << " " << index_i << " " << index_j << " " << index_k << std::endl;
                     float theta = k.m_theta;
                     float psi = k.m_psi;
 
@@ -393,7 +387,6 @@ Gradient::Block_list Gradient::calculate_histograms(Model &model, clipper::Xmap<
 
                     blocks[block_index].m_psi_histogram[psi_angle_bin_index_lower].second += k.m_magnitude * psi_lower_angle_proportion;
                     blocks[block_index].m_psi_histogram[psi_angle_bin_index_upper].second += k.m_magnitude * psi_upper_angle_proportion;
-
                 }
             }
         }
@@ -489,8 +482,7 @@ GradientData Gradient::calculate_gradient_data(int nu, int nv, int nw, int local
     float theta = acos((gradient_z/magnitude)) * (180.0 / M_PI);
     float psi = atan(gradient_y/gradient_x) * (180.0 / M_PI);
 
-    std::cout << m_image[probe_u][probe_v][probe_w].data() << " " << gradient_x << " " << gradient_y << " " << gradient_z << " " << magnitude << " " << theta << " " << psi <<  std::endl;
-
+    std::cout << "[504] " << m_image[probe_u][probe_v][probe_w].data() << " " << gradient_x << " " << gradient_y << " " << gradient_z << " " << magnitude << " " << theta << " " << psi <<  std::endl;
 
     if (theta < 0) {
         theta += 180;
@@ -508,7 +500,6 @@ GradientData Gradient::calculate_gradient_data(int nu, int nv, int nw, int local
         psi -= 180;
     }
 
-    std::cout << "Theta " << theta << " Psi " << psi << std::endl;
 
     GradientData gradient_data;
     gradient_data.m_magnitude = magnitude;
@@ -516,24 +507,25 @@ GradientData Gradient::calculate_gradient_data(int nu, int nv, int nw, int local
     gradient_data.m_theta = theta;
     gradient_data.m_psi = psi;
 
+    std::cout << "Line number : 529 " << "Theta " << gradient_data.m_theta << " Psi " << gradient_data.m_psi << std::endl;
 //    std::cout << theta << std::endl;
 
     return gradient_data;
 }
 
-void Gradient::write_histogram_data(Gradient::Block_list &blocks, std::string file_name) {
+void Gradient::write_histogram_data(Gradient::Block_list &blocks, std::string file_name, std::string path) {
 
     std::cout << "Writing histogram data to " << file_name << std::endl;
     std::ofstream theta_file;
-    theta_file.open (file_name + "theta_histogram.csv");
+    theta_file.open (path + "theta/" + file_name + "theta_histogram.csv");
     theta_file << "0,20,40,60,80,100,120,140,160\n";
 
     std::ofstream psi_file;
-    psi_file.open (file_name + "psi_histogram.csv");
+    psi_file.open (path + "psi/" + file_name + "psi_histogram.csv");
     psi_file << "0,20,40,60,80,100,120,140,160\n";
 
     std::ofstream all_data_file;
-    all_data_file.open (file_name + "theta_and_psi_histogram.csv");
+    all_data_file.open (path + "2d/" + file_name + "theta_and_psi_histogram.csv");
     all_data_file << "Theta,Psi\n";
 
     for( Block block : blocks) {
