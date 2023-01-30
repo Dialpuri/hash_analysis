@@ -1,6 +1,8 @@
 //
 // Created by jordan on 1/24/23.
 //
+#pragma once
+
 
 #ifndef HASH_ANALYSIS_MATRIX_H
 #define HASH_ANALYSIS_MATRIX_H

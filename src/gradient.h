@@ -2,8 +2,10 @@
 // Created by jordan on 1/18/23.
 //
 
-#ifndef HASH_ANALYSIS_DENSITY_H
-#define HASH_ANALYSIS_DENSITY_H
+
+//
+#ifndef HASH_ANALYSIS_GRADIENT_H
+#define HASH_ANALYSIS_GRADIENT_H
 
 #include <stdio.h>
 #include <fstream>
@@ -14,7 +16,9 @@
 #include "/opt/xtal/ccp4-8.0/include/clipper/clipper-contrib.h"
 #include "/opt/xtal/ccp4-8.0/include/clipper/clipper-minimol.h"
 #include "/opt/xtal/ccp4-8.0/include/clipper/clipper-ccp4.h"
+
 #include "hash.h"
+#include "model.h"
 
 class Gradient {
 
@@ -52,10 +56,19 @@ public:
     //!
     Blocks transform_to_blocks();
 
-    //! OLD - DO NOT USE
+    //!
     //! \param blocks
     //!
+    //! Given a 3D vector of Block (Blocks), calculate the theta and psi histograms.
+    //!
     void calculate_histograms(Blocks& blocks);
+
+    //!
+    //! \param blocks
+    //!
+    //! Given a list of blocks (by reference), calculate the theta and psi histograms.
+    //!
+    void calculate_histograms(Block_list& blocks);
 
     //!
     //! \param Model& model
@@ -85,6 +98,11 @@ public:
     //!
     void write_histogram_data(Gradient::Block_list &blocks, std::string file_name, std::string path);
 
+
+    void write_histogram_data_auto(Gradient::Block_list& blocks, std::string path, std::string file_name);
+
+
+
     //!
     //! \param clipper::Xmap<float>& xmap
     //! \param int lower_u
@@ -98,6 +116,30 @@ public:
     //! Returns a clipper::MMonomer which has hydrogen atoms at each of the bounding box points for use in visualistaion in Coot
     //!
     clipper::MMonomer return_bounding_box(clipper::Xmap<float>& xmap, int lower_u, int lower_v, int lower_w, int upper_u, int upper_v, int upper_w);
+
+    //!
+    //! \param Model& model
+    //!
+    //! Assign each atom in a models to a block, pass Blocks by reference and it will contain atom counts for each block
+    //!
+    void assign_model_to_blocks(Model &model, Blocks &blocks);
+
+    //!
+    //! \param clipper::Coord_grid& coord_grid
+    //! \param Blocks& blocks
+    //!
+    //! Assigns a coord_grid to a block and adds to the blocks internal counter
+    //!
+    void assign_atom_to_block(clipper::Coord_grid &coord_grid, Blocks &blocks);
+
+    //!
+    //! \param blocks
+    //! \param atom_limit
+    //! \return Block_list
+    //!
+    //! Filter the blocks based on atom limit, must assign model to blocks before calling otherwise all will be returned
+    //!
+    Block_list filter_blocks(Gradient::Blocks &blocks, int atom_limit);
 
 private:
     Density::PixelMap& m_image;
@@ -117,4 +159,4 @@ private:
 };
 
 
-#endif //HASH_ANALYSIS_DENSITY_H
+#endif //HASH_ANALYSIS_GRADIENT_H

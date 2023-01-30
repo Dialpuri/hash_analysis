@@ -63,18 +63,31 @@ void Gradient::calculate_gradient() {
 
                 float magnitude = sqrt((pow(gradient_x, 2) + pow(gradient_y, 2) + pow(gradient_z, 2)));
                 float angle = atan((gradient_z/gxy_mag)) * (180.0 / M_PI);
+                float theta = acos((gradient_z/magnitude)) * (180.0 / M_PI);
+                float psi = atan(gradient_y/gradient_x) * (180.0 / M_PI);
 
-                if (angle < 0) {
-                    angle = angle + 180;
+                if (theta < 0) {
+                    theta += 180;
                 }
 
-                if (angle > 180) {
-                    angle = angle - 180;
+                if (theta > 180) {
+                    theta -= 180;
                 }
+
+                if (psi < 0) {
+                    psi += 180;
+                }
+
+                if (psi > 180) {
+                    psi -= 180;
+                }
+
 
                 GradientData gradient_data;
-                gradient_data.m_angle = angle;
                 gradient_data.m_magnitude = magnitude;
+                gradient_data.m_angle = angle;
+                gradient_data.m_theta = theta;
+                gradient_data.m_psi = psi;
                 m_gradient_map[i][j][k] = gradient_data;
             }
         }
@@ -181,9 +194,18 @@ Gradient::Blocks Gradient::transform_to_blocks() {
 //                                overflow_x << " " << overflow_y << " " << overflow_z << "  " <<
 //                                m_gradient_map[probe_x][probe_y][probe_z].m_angle << std::endl;
 
-                                blocks[i][j][k].i = i;
-                                blocks[i][j][k].j = j;
-                                blocks[i][j][k].k = k;
+                                blocks[i][j][k].i = i * block_size;
+                                blocks[i][j][k].j = j * block_size;
+                                blocks[i][j][k].k = k * block_size;
+
+                                blocks[i][j][k].u_lower = i * block_size;
+                                blocks[i][j][k].u_upper = i * block_size + 8 ;
+
+                                blocks[i][j][k].v_lower = j * block_size;
+                                blocks[i][j][k].v_upper = j * block_size + 8 ;
+
+                                blocks[i][j][k].w_lower = k * block_size;
+                                blocks[i][j][k].w_upper = k * block_size + 8;
                                 blocks[i][j][k].overflowing = overflowing;
 
                             }
@@ -200,10 +222,21 @@ Gradient::Blocks Gradient::transform_to_blocks() {
                             int gradient_index_j = (j * block_size) + v;
                             int gradient_index_k = (k * block_size) + w;
 
+//                            std::cout << m_gradient_map[gradient_index_i][gradient_index_j][gradient_index_k].m_theta << " " << m_gradient_map[gradient_index_i][gradient_index_j][gradient_index_k].m_psi << std::endl;
+
                             blocks[i][j][k].m_data[u][v][w] = m_gradient_map[gradient_index_i][gradient_index_j][gradient_index_k];
-                            blocks[i][j][k].i = i;
-                            blocks[i][j][k].j = j;
-                            blocks[i][j][k].k = k;
+                            blocks[i][j][k].i = i * block_size;
+                            blocks[i][j][k].j = j * block_size;
+                            blocks[i][j][k].k = k * block_size;
+
+                            blocks[i][j][k].u_lower = i * block_size;
+                            blocks[i][j][k].u_upper = i * block_size + 8 ;
+
+                            blocks[i][j][k].v_lower = j * block_size;
+                            blocks[i][j][k].v_upper = j * block_size + 8 ;
+
+                            blocks[i][j][k].w_lower = k * block_size;
+                            blocks[i][j][k].w_upper = k * block_size + 8;
                             blocks[i][j][k].overflowing = overflowing;
                         }
                     }
@@ -213,44 +246,58 @@ Gradient::Blocks Gradient::transform_to_blocks() {
     }
 
     return blocks;
-
 }
 
 void Gradient::calculate_histograms(Gradient::Blocks &blocks) {
 
-    for (auto x: blocks) {
-        for (auto y: x) {
-            for (auto block : y) {
-
+    for (int i = 0; i < blocks.size(); i++) {
+        for (int j = 0; j < blocks[i].size(); j++) {
+            for (int k = 0; k < blocks[i][j].size(); k++) {
                 int angle_step = 20;
                 int number_of_bins = 180 / angle_step;
 
-                for (int i = 0; i < number_of_bins; i++) {
-//                    Init histogram of length number_of_bins
-                    block.histogram.push_back(std::make_pair((i*angle_step), 0.0f));
+                for (int bin_index = 0; bin_index < number_of_bins; bin_index++) {
+                    blocks[i][j][k].m_theta_histogram.push_back(std::make_pair((bin_index * angle_step), 0.0f));
+                    blocks[i][j][k].m_psi_histogram.push_back(std::make_pair((bin_index * angle_step), 0.0f));
+
                 }
 
-                for (auto i: block.m_data) {
-                    for (auto j: i) {
-                        for (auto k: j) {
-                            float angle = k.m_angle;
+                for (auto m_data_i: blocks[i][j][k].m_data) {
+                    for (auto m_data_j: m_data_i) {
+                        for (auto m_data_k: m_data_j) {
+//                    std::cout << k.m_magnitude << " " << k.m_theta << " " << k.m_psi << " " << index_i << " " << index_j << " " << index_k << std::endl;
+                            float theta = m_data_k.m_theta;
+                            float psi = m_data_k.m_psi;
 
-                            int angle_bin_index_lower  = floor(angle / angle_step);
-                            int angle_bin_index_upper = ceil(angle / angle_step);
+                            int theta_angle_bin_index_lower  = floor(theta / angle_step);
+                            int theta_angle_bin_index_upper = ceil(theta / angle_step);
 
-                            if (angle_bin_index_upper > block.histogram.size() - 1) { angle_bin_index_upper = 0;}
+                            int psi_angle_bin_index_lower  = floor(psi / angle_step);
+                            int psi_angle_bin_index_upper = ceil(psi / angle_step);
 
-                            int lower_angle_bin = block.histogram[angle_bin_index_lower].first;
+                            if (theta_angle_bin_index_upper > blocks[i][j][k].m_theta_histogram.size() - 1) { theta_angle_bin_index_upper = 0;}
+                            if (psi_angle_bin_index_upper > blocks[i][j][k].m_psi_histogram.size() - 1) { psi_angle_bin_index_upper = 0;}
 
-                            float lower_angle_delta = angle - lower_angle_bin;
-                            float upper_angle_delta = angle_step - lower_angle_delta;
+                            int theta_lower_angle_bin = blocks[i][j][k].m_theta_histogram[theta_angle_bin_index_lower].first;
+                            int psi_lower_angle_bin = blocks[i][j][k].m_psi_histogram[psi_angle_bin_index_lower].first;
 
-                            float lower_angle_proportion = lower_angle_delta / 20;
-                            float upper_angle_proportion = upper_angle_delta / 20;
+                            float theta_lower_angle_delta = theta - theta_lower_angle_bin;
+                            float theta_upper_angle_delta = angle_step - theta_lower_angle_delta;
 
-                            block.histogram[angle_bin_index_lower].second += k.m_magnitude * lower_angle_proportion;
-                            block.histogram[angle_bin_index_upper].second += k.m_magnitude * upper_angle_proportion;
+                            float psi_lower_angle_delta = psi - psi_lower_angle_bin;
+                            float psi_upper_angle_delta = angle_step - psi_lower_angle_delta;
 
+                            float theta_lower_angle_proportion = theta_lower_angle_delta / 20;
+                            float theta_upper_angle_proportion = theta_upper_angle_delta / 20;
+
+                            float psi_lower_angle_proportion = psi_lower_angle_delta / 20;
+                            float psi_upper_angle_proportion = psi_upper_angle_delta / 20;
+
+                            blocks[i][j][k].m_theta_histogram[theta_angle_bin_index_lower].second += m_data_k.m_magnitude * theta_lower_angle_proportion;
+                            blocks[i][j][k].m_theta_histogram[theta_angle_bin_index_upper].second += m_data_k.m_magnitude * theta_upper_angle_proportion;
+
+                            blocks[i][j][k].m_psi_histogram[psi_angle_bin_index_lower].second += m_data_k.m_magnitude * psi_lower_angle_proportion;
+                            blocks[i][j][k].m_psi_histogram[psi_angle_bin_index_upper].second += m_data_k.m_magnitude * psi_upper_angle_proportion;
                         }
                     }
                 }
@@ -329,6 +376,12 @@ Gradient::Block_list Gradient::calculate_histograms(Model &model, clipper::Xmap<
                     for (int local_w = lower_w; local_w < upper_w; local_w++) {
 
                         block.m_data[local_map_u][local_map_v][local_map_w] = calculate_gradient_data(nu, nv, nw, local_u, local_v, local_w);
+                        block.u_lower = lower_u;
+                        block.u_upper = upper_u;
+                        block.v_lower = lower_v;
+                        block.v_upper = upper_v;
+                        block.w_lower = lower_w;
+                        block.w_upper = upper_w;
                         local_map_w++;
                     }
                     local_map_v++;
@@ -621,3 +674,186 @@ Gradient::return_bounding_box(clipper::Xmap<float>& xmap, int lower_u, int lower
 
         return output_monomer;
 }
+
+void Gradient::assign_model_to_blocks(Model &model, Blocks &blocks) {
+
+    clipper::Grid_sampling grid_sampling = model.m_xmap_ptr->grid_sampling();
+    clipper::Cell cell = model.m_xmap_ptr->cell();
+
+    for (int p = 0; p < model.m_model.size(); p++) {
+
+        clipper::MPolymer polymer = model.m_model[p];
+        std::cout << "Polymer " << p+1 << "/" << model.m_model.size() << std::endl;
+
+        for (int c = 0; c < polymer.size(); c++) {
+
+            clipper::MMonomer monomer = polymer[c];
+
+//            std::cout << " Monomer " << c+1 << "/" << polymer.size() << " Polymer " << p+1 << "/" << model.m_model.size() << std::endl;
+            for (int a = 0; a < monomer.atom_list().size(); a++) {
+                clipper::MAtom atom = monomer[a];
+                clipper::Coord_grid grid_point = atom.coord_orth().coord_frac(cell).coord_grid(grid_sampling);
+                assign_atom_to_block(grid_point, blocks);
+            }
+        }
+    }
+}
+
+void Gradient::assign_atom_to_block(clipper::Coord_grid &coord_grid, Gradient::Blocks &blocks) {
+//    std::cout << "Assigning atom " << coord_grid.format() << " to a block" << std::endl;
+    for (int i = 0; i < blocks.size(); i++) {
+        for (int j = 0; j < blocks[0].size(); j++) {
+            for (int k = 0; k < blocks[0][0].size(); k++) {
+                Block block = blocks[i][j][k];
+                int u = coord_grid.u();
+                int v = coord_grid.v();
+                int w = coord_grid.w();
+
+//                std::cout << block.u_lower << " " << u << " " << block.u_upper << "\t";
+//                std::cout << block.v_lower << " " << v << " " << block.v_upper << "\t";
+//                std::cout << block.w_lower << " " << w << " " << block.w_upper << std::endl;
+//                std::cout << block.i << " " << block.j << " " << block.k << std::endl;
+//                std::cout << std::endl;
+
+                if (((block.u_lower < u) && (u < block.u_upper)) &&
+                    ((block.v_lower < v) && (u < block.v_upper)) &&
+                    ((block.w_lower < w) && (u < block.w_upper))) {
+
+                    blocks[i][j][k].number_of_atoms += 1;
+                }
+            }
+        }
+    }
+}
+
+Gradient::Block_list Gradient::filter_blocks(Gradient::Blocks &blocks, int atom_limit) {
+
+    Gradient::Block_list return_list;
+
+    for (auto x: blocks) {
+        for (auto y: x) {
+            for (auto block: y) {
+                if (block.number_of_atoms < atom_limit) {
+                    return_list.push_back(block);
+                }
+            }
+        }
+    }
+    return return_list;
+}
+
+void Gradient::calculate_histograms(Gradient::Block_list &blocks) {
+    for (int block_index = 0; block_index < blocks.size(); block_index++) {
+        int angle_step = 20;
+        int number_of_bins = 180 / angle_step;
+
+        for (int bin_index = 0; bin_index < number_of_bins; bin_index++) {
+            blocks[block_index].m_theta_histogram.push_back(std::make_pair((bin_index * angle_step), 0.0f));
+            blocks[block_index].m_psi_histogram.push_back(std::make_pair((bin_index * angle_step), 0.0f));
+
+        }
+
+        for (auto m_data_i: blocks[block_index].m_data) {
+            for (auto m_data_j: m_data_i) {
+                for (auto m_data_k: m_data_j) {
+//                    std::cout << block_index.m_magnitude << " " << block_index.m_theta << " " << block_index.m_psi << " " << index_i << " " << index_j << " " << index_k << std::endl;
+                    float theta = m_data_k.m_theta;
+                    float psi = m_data_k.m_psi;
+
+                    int theta_angle_bin_index_lower  = floor(theta / angle_step);
+                    int theta_angle_bin_index_upper = ceil(theta / angle_step);
+
+                    int psi_angle_bin_index_lower  = floor(psi / angle_step);
+                    int psi_angle_bin_index_upper = ceil(psi / angle_step);
+
+                    if (theta_angle_bin_index_upper > blocks[block_index].m_theta_histogram.size() - 1) { theta_angle_bin_index_upper = 0;}
+                    if (psi_angle_bin_index_upper > blocks[block_index].m_psi_histogram.size() - 1) { psi_angle_bin_index_upper = 0;}
+
+                    int theta_lower_angle_bin = blocks[block_index].m_theta_histogram[theta_angle_bin_index_lower].first;
+                    int psi_lower_angle_bin = blocks[block_index].m_psi_histogram[psi_angle_bin_index_lower].first;
+
+                    float theta_lower_angle_delta = theta - theta_lower_angle_bin;
+                    float theta_upper_angle_delta = angle_step - theta_lower_angle_delta;
+
+                    float psi_lower_angle_delta = psi - psi_lower_angle_bin;
+                    float psi_upper_angle_delta = angle_step - psi_lower_angle_delta;
+
+                    float theta_lower_angle_proportion = theta_lower_angle_delta / 20;
+                    float theta_upper_angle_proportion = theta_upper_angle_delta / 20;
+
+                    float psi_lower_angle_proportion = psi_lower_angle_delta / 20;
+                    float psi_upper_angle_proportion = psi_upper_angle_delta / 20;
+
+                    blocks[block_index].m_theta_histogram[theta_angle_bin_index_lower].second += m_data_k.m_magnitude * theta_lower_angle_proportion;
+                    blocks[block_index].m_theta_histogram[theta_angle_bin_index_upper].second += m_data_k.m_magnitude * theta_upper_angle_proportion;
+
+                    blocks[block_index].m_psi_histogram[psi_angle_bin_index_lower].second += m_data_k.m_magnitude * psi_lower_angle_proportion;
+                    blocks[block_index].m_psi_histogram[psi_angle_bin_index_upper].second += m_data_k.m_magnitude * psi_upper_angle_proportion;
+                }
+            }
+        }
+    }
+}
+
+void Gradient::write_histogram_data_auto(Gradient::Block_list &blocks, std::string path, std::string file_name) {
+
+
+    for (int block_index = 0; block_index < blocks.size(); block_index++) {
+        Block block = blocks[block_index];
+        std::string file_name_extended = file_name + "blockid_" + std::to_string(block_index) + "_";
+
+//        std::cout << "Writing histogram data to " << file_name_extended << std::endl;
+        std::ofstream theta_file;
+        theta_file.open(path + "theta/" + file_name_extended + "theta_histogram.csv");
+        theta_file << "0,20,40,60,80,100,120,140,160\n";
+
+        std::ofstream psi_file;
+        psi_file.open(path + "psi/" + file_name_extended + "psi_histogram.csv");
+        psi_file << "0,20,40,60,80,100,120,140,160\n";
+
+        std::ofstream all_data_file;
+        all_data_file.open(path + "2d/" + file_name_extended + "theta_and_psi_histogram.csv");
+        all_data_file << "Theta,Psi\n";
+
+        std::ofstream two_d_histogram;
+        two_d_histogram.open(path + "2d_histograms/" + file_name_extended + "theta_and_psi_histogram.csv");
+        two_d_histogram << "Theta,Psi\n";
+
+//        std::cout << path + "2d/" + file_name_extended + "theta_and_psi_histogram.csv" << " is open " << std::endl;
+
+        int x_no = 0;
+
+        for (auto y: block.m_data) {
+            for (auto z: y) {
+                for (auto a: z) {
+                    all_data_file << a.m_theta << "," << a.m_psi << "\n";
+                }
+            }
+        }
+
+        for (int i = 0; i < block.m_theta_histogram.size(); i++) {
+            auto theta = block.m_theta_histogram[i];
+            auto psi = block.m_psi_histogram[i];
+
+            if (x_no == 8) {
+                theta_file << theta.second;
+                psi_file << psi.second;
+            } else {
+
+                theta_file << theta.second << ", ";
+                psi_file << psi.second << ", ";
+            }
+            x_no++;
+        }
+        theta_file << "\n";
+        psi_file << "\n";
+
+
+        psi_file.close();
+        all_data_file.close();
+        theta_file.close();
+    }
+
+}
+
+

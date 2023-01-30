@@ -4,6 +4,7 @@
 
 #ifndef HASH_ANALYSIS_MODEL_H
 #define HASH_ANALYSIS_MODEL_H
+
 #include <stdio.h>
 #include <fstream>
 #include <string>
@@ -22,16 +23,22 @@ class Model {
     friend class Density;
 
 public:
-    Model(clipper::Xmap<float> xmap): m_xmap(xmap)  {};
+    Model(clipper::Xmap<float>* xmap): m_xmap_ptr(xmap)  {};
 
     void load_model(std::string file_path);
     void prepare_sugars();
 
+    //!
+    //! \param clipper::Atom_list& atoms
+    //! \return Matrix<float>
+    //!
+    //! Calculates the plane equation in form Ax + By + C = z and returns matrix
+    //! [ A , B , C ] vertically.
     Matrix<float> calculate_plane_eqn(clipper::Atom_list atoms);
 
     clipper::MiniMol m_model;
+    clipper::Xmap<float>* m_xmap_ptr;
 private:
-    clipper::Xmap<float> m_xmap;
 };
 
 #endif //HASH_ANALYSIS_MODEL_H

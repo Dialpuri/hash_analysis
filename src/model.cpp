@@ -55,7 +55,7 @@ void Model::prepare_sugars() {
         }
 
         clipper::RTop<float> rtop;
-    };
+    }
 
 
     }

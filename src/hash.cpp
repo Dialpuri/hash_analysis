@@ -3,7 +3,9 @@
 //
 
 #include "hash.h"
-
+#include "gradient.h"
+#include "model.h"
+#include "probe.h"
 
 void Density::load_file(std::string file_path) {
     clipper::CCP4MTZfile mtz;
@@ -84,7 +86,7 @@ Density::PixelMap Density::extract_data(clipper::Xmap<float> xmap) {
 
                 tertiary_list.push_back(PixelData(xmap_value, iw.coord().u(), iw.coord().v(), iw.coord().w(), iw.coord_orth().x(), iw.coord_orth().y(), iw.coord_orth().z()));
 
-                std::cout << iw.coord().format() << " " << xmap[iw] << std::endl;
+//                std::cout << iw.coord().format() << " " << xmap[iw] << std::endl;
             }
             secondary_list.push_back(tertiary_list);
         }
@@ -92,7 +94,6 @@ Density::PixelMap Density::extract_data(clipper::Xmap<float> xmap) {
         m_pixel_data.push_back(secondary_list);
         return_map.push_back(secondary_list);
     }
-
 
     std::cout << "Size of m_pixel_data ~ "<< m_pixel_data.size() << " " << m_pixel_data[0].size() << " " << m_pixel_data[0][0].size() << std::endl;
 
@@ -522,10 +523,32 @@ int main() {
 
 
     std::cout << "Main function called" << std::endl;
-//
+
 //    Density dens;
 //    dens.load_file("./data/1hr2_phases.mtz");
 //    dens.extract_data();
+
+    Density dens;
+    dens.load_file("./data/1hr2_phases.mtz");
+    Density::PixelMap map = dens.extract_data(dens.xmap);
+
+    Gradient grad(map);
+    grad.calculate_gradient();
+    Gradient::Blocks blocks = grad.transform_to_blocks();
+
+    Model model(&dens.xmap);
+    model.load_model("./data/1hr2.pdb");
+
+    grad.assign_model_to_blocks(model, blocks);
+
+    Gradient::Block_list filtered_block_list = grad.filter_blocks(blocks, 1);
+
+    grad.calculate_histograms(filtered_block_list);
+
+    grad.write_histogram_data_auto(filtered_block_list, "./debug/histogram_data_no_sugars/", "1hr2_");
+
+    std::cout << "Block list size is " << filtered_block_list.size() << " out of " << (blocks.size() * blocks[0].size() * blocks[0][0].size()) << std::endl;
+
 
 //// CODE TO RUN LIBRARY ANALYSIS AND GENERATE HoG DATASET
 //    std::string library_path = "./data/rebuilt_filenames.txt";
@@ -554,7 +577,7 @@ int main() {
 //            Gradient::Block_list blocks = grad.calculate_histograms(model, sugars.second);
 //
 //            std::string file_name = library_item.get_pdb_code() + "_SI_" + std::to_string(i) + "_";
-//            grad.write_histogram_data(blocks, file_name, std::string("./debug/histogram_data/"));
+//            grad.write_histogram_data(blocks, file_name, std::string("./debug/histogram_data_sugars/"));
 //
 //        }
 //
@@ -581,7 +604,6 @@ int main() {
 //    std::cout << blocks[0].histogram.size() << std::endl;
 
 //    gradient.write_histogram_data(blocks, "./debug/");
-
 
 
 //    Model model;

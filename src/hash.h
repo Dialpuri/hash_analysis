@@ -1,6 +1,9 @@
 //
 // Created by jordan on 1/27/23.
 //
+#ifndef HASH_ANALYSIS_HASH_H
+#define HASH_ANALYSIS_HASH_H
+
 #include <stdio.h>
 #include <fstream>
 #include <string>
@@ -10,14 +13,10 @@
 #include "/opt/xtal/ccp4-8.0/include/clipper/clipper-contrib.h"
 #include "/opt/xtal/ccp4-8.0/include/clipper/clipper-minimol.h"
 #include "/opt/xtal/ccp4-8.0/include/clipper/clipper-ccp4.h"
-#include "gradient.h"
-#include "model.h"
-#include "probe.h"
+
 #include <vector>
 #include <iostream>
 
-#ifndef HASH_ANALYSIS_HASH__H
-#define HASH_ANALYSIS_HASH_H
 
 class PixelData {
 public:
@@ -189,7 +188,6 @@ private:
     clipper::Cell m_cell;
     clipper::Grid_sampling m_gridsampling;
     clipper::Spacegroup m_spacegroup;
-
 };
 
 
@@ -200,6 +198,15 @@ public:
 
     int i, j, k;
     bool overflowing = false;
+    int number_of_atoms = 0;
+    int number_of_sugars = 0;
+
+    int u_lower = 0;
+    int u_upper = 0;
+    int v_lower = 0;
+    int v_upper = 0;
+    int w_lower = 0;
+    int w_upper = 0;
 
     std::vector<std::pair<int, float>> m_theta_histogram;
     std::vector<std::pair<int, float>> m_psi_histogram;
