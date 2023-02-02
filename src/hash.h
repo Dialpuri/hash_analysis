@@ -13,7 +13,6 @@
 #include "/opt/xtal/ccp4-8.0/include/clipper/clipper-contrib.h"
 #include "/opt/xtal/ccp4-8.0/include/clipper/clipper-minimol.h"
 #include "/opt/xtal/ccp4-8.0/include/clipper/clipper-ccp4.h"
-
 #include <vector>
 #include <iostream>
 
@@ -116,11 +115,13 @@ class Density {
 
 public:
 
+
     friend class Model;
     friend class Gradient;
     typedef std::vector<std::vector<std::vector<PixelData>>> PixelMap;
     Density() {}
 
+    Density(const clipper::Xmap<float>* xmap, clipper::MiniMol& mol): m_xmap_ptr(xmap), m_mol(mol) {};
 
 //    LOADING FUNCTIONS
 
@@ -138,7 +139,7 @@ public:
     //!
     //! Takes in xmap and converts to PixelMap (3D vector of PixelData)
     //! 
-    PixelMap extract_data(clipper::Xmap<float> xmap);
+    PixelMap extract_data(clipper::Xmap<float> &xmap);
 
 //    SLICING FUNCTIONS
     void slice(float slice_index);
@@ -173,11 +174,20 @@ public:
     void export_pixelmap(std::string file_name, PixelMap pixel_map);
 
 
+    //!
+    //! \return std::pair<PixelMap, std::string>
+    //!
+    //! Use m_xmap_ptr and m_mol to get a random position and classify it (sugar, base, phosphate, calpha, sidechain or none).
+    //! Returns a pair which contains a box (PixelMap) and the classification result (as shown above).
+    //!
+    std::pair<Density::PixelMap, std::string> get_random_position(clipper::MiniMol &mol, clipper::Xmap<float> *xmap);
+
+
     std::vector<PixelData> difference_of_gaussian(std::vector<PixelData>& top, std::vector<PixelData>& bottom);
     PixelMap difference_of_gaussian(PixelMap& top, PixelMap& bottom);
 
-    void set_xmap(clipper::Xmap<float>& xmap_in) {xmap = xmap_in; }
-    clipper::Xmap<float> xmap;
+    const clipper::Xmap<float>* m_xmap_ptr= nullptr;
+    clipper::MiniMol m_mol;
 
 private:
     std::vector<PixelData> m_slice;
@@ -188,6 +198,7 @@ private:
     clipper::Cell m_cell;
     clipper::Grid_sampling m_gridsampling;
     clipper::Spacegroup m_spacegroup;
+
 };
 
 

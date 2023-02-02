@@ -2,10 +2,17 @@
 // Created by jordan on 12/14/22.
 //
 
-#include "probe.h"
+#include "library.h"
 
-LibraryItem::LibraryItem(std::string pdb_code) : m_pdb_code(pdb_code) {
-    m_pdb_file_path = pdb_base_dir + pdb_code + ".pdb";
+LibraryItem::LibraryItem(std::string pdb_code, std::string pdb_base_dir, std::string pdb_file_ending,
+                         bool use_experimental_data)
+        : m_pdb_code(pdb_code), m_pdb_base_dir(pdb_base_dir), m_pdb_file_ending(pdb_file_ending) {
+
+    m_pdb_file_path = pdb_base_dir + pdb_code + m_pdb_file_ending;
+
+//    std::cout << m_pdb_file_path << std::endl;
+
+    if (use_experimental_data == true) { return; }
 
     try {
         clipper::MiniMol mol = load_pdb();
@@ -21,6 +28,8 @@ LibraryItem::LibraryItem(std::string pdb_code) : m_pdb_code(pdb_code) {
 
 clipper::MiniMol LibraryItem::load_pdb() {
 
+    std::cout << "Loading PDB File " << m_pdb_file_path << std::endl;
+
     clipper::MMDBfile m_file;
     clipper::MiniMol mol;
     const int mmdbflags = ::mmdb::MMDBF_IgnoreBlankLines | ::mmdb::MMDBF_IgnoreDuplSeqNum | ::mmdb::MMDBF_IgnoreNonCoorPDBErrors | ::mmdb::MMDBF_IgnoreRemarks;
@@ -34,32 +43,34 @@ clipper::MiniMol LibraryItem::load_pdb() {
         throw std::runtime_error(m_pdb_code + " - Mol.size() == 0");
     }
 
-    clipper::MiniMol return_mol;
+    clipper::MiniMol return_mol = clipper::MiniMol(mol.spacegroup(), mol.cell());
 
     std::vector<std::string> search_atoms = {" C1'", " C2'", " C3'", " C4'", " C5'", " O3'", " O4'", " O5'", " P  "};
 
     for (int chain = 0; chain < mol.size(); chain++) {
-//        clipper::MPolymer mp;
         for (int residue = 0; residue < mol[chain].size(); residue++) {
             if (
-                    mol[chain][residue].lookup(" C1'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" C2'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" C3'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" C4'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" C5'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" O3'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" O4'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" O5'", clipper::MM::ANY) >= 0 &&
-                    mol[chain][residue].lookup(" P  ", clipper::MM::ANY) >= 0
+                    mol[chain][residue].lookup(" C1'", clipper::MM::UNIQUE) >= 0 &&
+                    mol[chain][residue].lookup(" C2'", clipper::MM::UNIQUE) >= 0 &&
+                    mol[chain][residue].lookup(" C3'", clipper::MM::UNIQUE) >= 0 &&
+                    mol[chain][residue].lookup(" C4'", clipper::MM::UNIQUE) >= 0 &&
+                    mol[chain][residue].lookup(" C5'", clipper::MM::UNIQUE) >= 0 &&
+                    mol[chain][residue].lookup(" O3'", clipper::MM::UNIQUE) >= 0 &&
+                    mol[chain][residue].lookup(" O4'", clipper::MM::UNIQUE) >= 0 &&
+                    mol[chain][residue].lookup(" O5'", clipper::MM::UNIQUE) >= 0 &&
+                    mol[chain][residue].lookup(" P  ", clipper::MM::UNIQUE) >= 0
                     ) {
                 int atom = mol[chain][residue].lookup( " C4'", clipper::MM::ANY );
                 if ( mol[chain][residue][atom].occupancy() > 0.01 && mol[chain][residue][atom].u_iso() < clipper::Util::b2u(100.0))  {
 
                     clipper::MPolymer mp;
                     clipper::MMonomer monomer;
+
                     for (int atom_string_index = 0; atom_string_index < search_atoms.size(); atom_string_index++) {
                         std::string atom_string = search_atoms[atom_string_index];
-                        monomer.insert(mol[chain][residue].find(atom_string));
+                        if (mol[chain][residue].lookup(atom_string, clipper::MM::UNIQUE) >= 0) {
+                            monomer.insert(mol[chain][residue].find(atom_string));
+                        }
                     }
                     monomer.set_id("A");
                     monomer.set_type("?");
@@ -274,19 +285,91 @@ void LibraryItem::dump_electron_density(std::string path) {
 
 }
 
-// LIBRARY CLASS IMPLEMENTATIONS
+void LibraryItem::load_reflections(clipper::MiniMol &mol) {
+    std::string path_base = "./data/RNA_test_structures/MTZ Files/";
 
-Library::Library(std::string library_file_path) : m_library_path(library_file_path) {
-    m_library = read_library_item();
+    std::string pdb_code = this->get_pdb_code();
 
-    for (LibraryItem library_item: m_library) {
-//        std::cout << m_library_path << std::endl;
-        clipper::MiniMol mol = library_item.load_pdb();
-        library_item.calculate_electron_density(mol);
+    std::string mtz_file_path = path_base + pdb_code + "_phases.mtz";
+
+//    std::cout << "Loading reflection file for " << mtz_file_path << std::endl;
+
+    clipper::HKL_info hkl;
+    clipper::HKL_data<clipper::data32::F_phi> f_phi_data(hkl );
+
+    clipper::CCP4MTZfile mtz_in;
+    mtz_in.open_read(mtz_file_path );        // open new file
+    mtz_in.import_hkl_info(hkl);     // read sg, cell, reso, hkls
+
+    std::vector<clipper::String> mtz_columns = mtz_in.column_labels();
+
+//    for (auto x: mtz_columns) {
+//        std::cout << x << "\n";
+//    }
+//    std::cout << std::endl;
+
+    std::map<std::string, std::string> column_name_map;
+
+    column_name_map["/FOBS "] = "*/*/[FOBS,SIGFOBS]";
+    column_name_map["/FP "] = "*/*/[FP,SIGFP]";
+    column_name_map["/FOSC "] = "*/*/[FOSC,SIGFOSC]";
+    column_name_map["/F-obs "] = "*/*/[F-obs,SIGF-obs]";
+    column_name_map["/F "] = "*/*/[F,SIGF]";
+
+
+    for (clipper::String column: mtz_columns) {
+        std::map<std::string, std::string>::iterator it;
+        for(it = column_name_map.begin(); it != column_name_map.end(); it++) {
+            if (column.find(it->first) != -1) {
+//                std::cout << "FOUND: " << it->first << std::endl;
+                mtz_in.import_hkl_data(f_phi_data, "*/*/[FC,PHIC]");
+            }
+        }
     }
+
+    mtz_in.close_read();
+
+    clipper::Grid_sampling mygrid(hkl.spacegroup(), hkl.cell(), hkl.resolution() );  // define grid
+    clipper::Xmap<float> mymap(hkl.spacegroup(), hkl.cell(), mygrid );  // define map
+    mymap.fft_from(f_phi_data );                  // generate map
+
+    std::cout << mymap.cell().format() << std::endl;
+
+    std::cout << "Created xmap with memadd - " << &mymap << std::endl;
+
+//    model_pair = std::make_pair(mol, &mymap);
+    m_xmap = mymap;
+    this->model_pair = std::make_pair(mol, &mymap);
 }
 
-std::vector <LibraryItem> Library::read_library_item() {
+// LIBRARY CLASS IMPLEMENTATIONS
+
+Library::Library(std::string library_file_path, std::string pdb_base_dir, bool use_experimental_data,
+                 std::string pdb_file_ending)
+        : m_library_path(library_file_path), m_pdb_base_dir(pdb_base_dir), m_pdb_file_ending(pdb_file_ending), m_use_experimental_data(use_experimental_data) {
+
+    m_library = read_library_item();
+
+    for (int i = 0; i < m_library.size(); i++) {
+        LibraryItem& library_item = m_library[i];
+//        std::cout << m_library_path << std::endl;
+        clipper::MiniMol mol = library_item.load_pdb();
+
+        if (use_experimental_data == true) {
+            library_item.load_reflections(mol);
+            std::cout << "Reflections loaded" << std::endl;
+        }
+        else {
+            library_item.calculate_electron_density(mol);
+        }
+    }
+
+    std::cout << "Library loaded." << std::endl;
+
+}
+
+std::vector<LibraryItem> Library::read_library_item() {
+//    "./data/RNA_test_structures/PDB Files/";
     std::vector <std::string> pdb_ids;
 
     std::fstream file_stream;
@@ -313,7 +396,7 @@ std::vector <LibraryItem> Library::read_library_item() {
 
     for (std::string pdb_code: row) {
 //        std::cout << pdb_code << std::endl;
-        return_list.push_back(LibraryItem(pdb_code));
+        return_list.push_back(LibraryItem(pdb_code, m_pdb_base_dir, m_pdb_file_ending, m_use_experimental_data));
     }
 
     return return_list;
@@ -332,7 +415,7 @@ void Library::combine_density() {
     std::vector<std::vector<std::vector<std::pair<std::vector<int>,float>>>> array3d;
 
     for (LibraryItem item: m_library) {
-        std::cout << item.pdb_base_dir << std::endl;
+        std::cout << item.m_pdb_base_dir << std::endl;
         for (std::pair<clipper::MMonomer, clipper::Xmap<float>> pair_: item.m_density) {
             combined_xmap += pair_.second;
 

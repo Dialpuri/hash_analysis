@@ -307,7 +307,8 @@ void Gradient::calculate_histograms(Gradient::Blocks &blocks) {
 }
 
 Gradient::Block_list Gradient::calculate_histograms(Model& model, Density& dens) {
-    return calculate_histograms(model, dens.xmap);
+    clipper::Xmap<float> xmap = *dens.m_xmap_ptr;
+    return calculate_histograms(model, xmap);
 }
 
 
@@ -535,7 +536,7 @@ GradientData Gradient::calculate_gradient_data(int nu, int nv, int nw, int local
     float theta = acos((gradient_z/magnitude)) * (180.0 / M_PI);
     float psi = atan(gradient_y/gradient_x) * (180.0 / M_PI);
 
-    std::cout << "[504] " << m_image[probe_u][probe_v][probe_w].data() << " " << gradient_x << " " << gradient_y << " " << gradient_z << " " << magnitude << " " << theta << " " << psi <<  std::endl;
+//    std::cout << "[504] " << m_image[probe_u][probe_v][probe_w].data() << " " << gradient_x << " " << gradient_y << " " << gradient_z << " " << magnitude << " " << theta << " " << psi <<  std::endl;
 
     if (theta < 0) {
         theta += 180;
@@ -553,14 +554,13 @@ GradientData Gradient::calculate_gradient_data(int nu, int nv, int nw, int local
         psi -= 180;
     }
 
-
     GradientData gradient_data;
     gradient_data.m_magnitude = magnitude;
     gradient_data.m_angle = angle;
     gradient_data.m_theta = theta;
     gradient_data.m_psi = psi;
 
-    std::cout << "Line number : 529 " << "Theta " << gradient_data.m_theta << " Psi " << gradient_data.m_psi << std::endl;
+//    std::cout << "Line number : 529 " << "Theta " << gradient_data.m_theta << " Psi " << gradient_data.m_psi << std::endl;
 //    std::cout << theta << std::endl;
 
     return gradient_data;
@@ -570,12 +570,12 @@ void Gradient::write_histogram_data(Gradient::Block_list &blocks, std::string fi
 
     std::cout << "Writing histogram data to " << file_name << std::endl;
     std::ofstream theta_file;
-    theta_file.open (path + "theta/" + file_name + "theta_histogram.csv");
-    theta_file << "0,20,40,60,80,100,120,140,160\n";
+    theta_file.open (path + "theta/" + file_name + "histogram.csv");
+    theta_file << "Theta_0,Theta_20,Theta_40,Theta_60,Theta_80,Theta_100,Theta_120,Theta_140,Theta_160\n";
 
     std::ofstream psi_file;
-    psi_file.open (path + "psi/" + file_name + "psi_histogram.csv");
-    psi_file << "0,20,40,60,80,100,120,140,160\n";
+    psi_file.open (path + "psi/" + file_name + "histogram.csv");
+    psi_file << "Psi_0,Psi_20,Psi_40,Psi_60,Psi_80,Psi_100,Psi_120,Psi_140,Psi_160\n";
 
     std::ofstream all_data_file;
     all_data_file.open (path + "2d/" + file_name + "theta_and_psi_histogram.csv");
@@ -804,12 +804,12 @@ void Gradient::write_histogram_data_auto(Gradient::Block_list &blocks, std::stri
 
 //        std::cout << "Writing histogram data to " << file_name_extended << std::endl;
         std::ofstream theta_file;
-        theta_file.open(path + "theta/" + file_name_extended + "theta_histogram.csv");
-        theta_file << "0,20,40,60,80,100,120,140,160\n";
+        theta_file.open(path + "theta/" + file_name_extended + "histogram.csv");
+        theta_file << "Theta_0,Theta_20,Theta_40,Theta_60,Theta_80,Theta_100,Theta_120,Theta_140,Theta_160\n";
 
         std::ofstream psi_file;
-        psi_file.open(path + "psi/" + file_name_extended + "psi_histogram.csv");
-        psi_file << "0,20,40,60,80,100,120,140,160\n";
+        psi_file.open (path + "psi/" + file_name_extended + "histogram.csv");
+        psi_file << "Psi_0,Psi_20,Psi_40,Psi_60,Psi_80,Psi_100,Psi_120,Psi_140,Psi_160\n";
 
         std::ofstream all_data_file;
         all_data_file.open(path + "2d/" + file_name_extended + "theta_and_psi_histogram.csv");

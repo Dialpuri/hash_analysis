@@ -2,10 +2,12 @@
 // Created by jordan on 12/14/22.
 //
 
+#include <random>
 #include "hash.h"
+#include <time.h>
 #include "gradient.h"
 #include "model.h"
-#include "probe.h"
+#include "library.h"
 
 void Density::load_file(std::string file_path) {
     clipper::CCP4MTZfile mtz;
@@ -35,13 +37,14 @@ void Density::load_file(std::string file_path) {
     std::cout << hkls.cell().format() << std::endl;
     std::cout << " Nref " << hkls.num_reflections() << " " << fphi.num_obs() << std::endl;
 
-    xmap = xwrk;
+    m_xmap_ptr = &xwrk;
 
 }
 
 
-Density::PixelMap Density::extract_data(clipper::Xmap<float> xmap) {
+Density::PixelMap Density::extract_data(clipper::Xmap<float> &xmap) {
 
+    std::cout << "Extracting data" << std::endl;
     clipper::Xmap_base::Map_reference_coord iu, iv, iw;
     clipper::Cell cell = xmap.cell();
 
@@ -51,7 +54,7 @@ Density::PixelMap Density::extract_data(clipper::Xmap<float> xmap) {
 
     m_cell = xmap.cell();
     m_gridsampling = xmap.grid_sampling();
-    m_spacegroup = xmap.spacegroup();
+//    m_spacegroup = xmap.spacegroup();
 
     clipper::Coord_orth base_coord_orth = clipper::Coord_orth(0,0,0);
     clipper::Coord_grid base_coord = base_coord_orth.coord_frac(xmap.cell()).coord_grid(grid);
@@ -103,6 +106,7 @@ Density::PixelMap Density::extract_data(clipper::Xmap<float> xmap) {
 
 void Density::slice(float slice_index) {
 
+    clipper::Xmap<float> xmap = *m_xmap_ptr;
     std::cout << "Slicing map with " << slice_index << std::endl;
 
     clipper::Xmap_base::Map_reference_coord iu, iv, iw;
@@ -518,41 +522,166 @@ Density::PixelMap Density::difference_of_gaussian(Density::PixelMap &top, Densit
     return difference;
 }
 
+std::pair<Density::PixelMap, std::string>
+Density::get_random_position(clipper::MiniMol &mol, clipper::Xmap<float> *xmap) {
+
+//    Get random position
+//    Check the model
+
+    std::cout << xmap->cell().format() << std::endl;
+
+    float a = xmap->cell().a();
+    float b = xmap->cell().b();
+    float c = xmap->cell().c();
+
+    float nu = xmap->grid_sampling().nu();
+    float nv = xmap->grid_sampling().nv();
+    float nw = xmap->grid_sampling().nw();
+
+    float grid_spacing = a/nu;
+
+    std::mt19937 prng{ std::random_device{}() };
+    static std::uniform_real_distribution<> dis_a (0,a);
+    static std::uniform_real_distribution<> dis_b (0,b);
+    static std::uniform_real_distribution<> dis_c (0,c);
+
+    float random_u = dis_a(prng);
+    float random_v = dis_b(prng);
+    float random_w = dis_c(prng);
+
+    random_u = 20;
+    random_v = 20;
+    random_w = 0;
+
+    clipper::Coord_orth point_1 = clipper::Coord_orth(a,b,c-1);
+    clipper::Coord_orth point_2 = clipper::Coord_orth(a,b,1);
+
+    clipper::Coord_frac cf = point_1.coord_frac(xmap->cell());
+
+    clipper::Coord_frac cf2 = point_2.coord_frac(xmap->cell());
+
+    clipper::Coord_grid cg1 = cf.coord_grid(xmap->grid_sampling());
+    std::cout << xmap->get_data(cg1) << std::endl;
+
+    clipper::Coord_grid cg2 = cf2.coord_grid(xmap->grid_sampling());
+    std::cout << xmap->get_data(cg2) << std::endl;
+    std::cout << cg1.format() << std::endl;
+    std::cout << cg2.format() << std::endl;
+
+    float x_1 = xmap->interp<clipper::Interp_nearest>(point_1.coord_frac(xmap->cell()));
+    float x_2 = xmap->interp<clipper::Interp_nearest>(point_2.coord_frac(xmap->cell()));
+
+//    std::cout << x_1 << " " << x_2 << std::endl;
+
+//    for (float i = random_u - 4; i < random_u + 4; i+=grid_spacing) {
+//        for (float j = random_v - 4; j < random_u + 4; j+=grid_spacing) {
+//            for (float k = random_w - 4; k < random_w + 4; k+=grid_spacing) {
+//                clipper::Coord_frac point = clipper::Coord_frac(i, j, k);
+//
+//                float x = xmap->interp<clipper::Interp_cubic>(point);
+//                std::cout << i << " " << j << " " << k << " " << x << std::endl;
+//            }
+//        }
+//    }
+
+
+    std::cout << "Random point selected is " << random_u << " " << random_v << " " << random_w << std::endl;
+
+    Density::PixelMap map;
+    return std::make_pair(map, "TEST");
+}
+
+class Finder {
+public:
+    void find_calpha_positions() {}
+    void find_backbone_positions() {}
+    void find_phosphate_positions() {}
+    void find_base_positions() {}
+};
+
 
 int main() {
 
+    srand((unsigned int)time(NULL));
 
     std::cout << "Main function called" << std::endl;
+
+    ///CODE TO RUN RANDOM POSITION ANALYSIS AND CLASSIFICATION
+
+    std::string library_path = "./data/RNA_test_structures/file_names_test.txt";
+    Library lib = Library(library_path, "./data/RNA_test_structures/PDB Files/", true, ".ent");
+
+    for (int i = 0; i < lib.m_library.size(); i++) {
+        Density dens = Density();
+        std::pair<Density::PixelMap, std::string> classified_block = dens.get_random_position(
+                lib.m_library[i].model_pair.first, &lib.m_library[i].m_xmap);
+
+    }
+
+    ///END
+
+
 
 //    Density dens;
 //    dens.load_file("./data/1hr2_phases.mtz");
 //    dens.extract_data();
 
-    Density dens;
-    dens.load_file("./data/1hr2_phases.mtz");
-    Density::PixelMap map = dens.extract_data(dens.xmap);
+/// CODE TO RUN NO SUGAR ANALYSIS
+//    Density dens;
+//    dens.load_file("./data/1hr2_phases.mtz");
+//    Density::PixelMap map = dens.extract_data(dens.xmap);
+//
+//    Gradient grad(map);
+//    grad.calculate_gradient();
+//    Gradient::Blocks blocks = grad.transform_to_blocks();
+//
+//    Model model(&dens.xmap);
+//    model.load_model("./data/1hr2.pdb");
+//
+//    grad.assign_model_to_blocks(model, blocks);
+//
+//    Gradient::Block_list filtered_block_list = grad.filter_blocks(blocks, 1);
+//
+//    grad.calculate_histograms(filtered_block_list);
+//
+//    grad.write_histogram_data_auto(filtered_block_list, "./debug/histogram_data_no_sugars/", "1hr2_");
+//
+//    std::cout << "Block list size is " << filtered_block_list.size() << " out of " << (blocks.size() * blocks[0].size() * blocks[0][0].size()) << std::endl;
+/// END
 
-    Gradient grad(map);
-    grad.calculate_gradient();
-    Gradient::Blocks blocks = grad.transform_to_blocks();
+//// CODE TO RUN ANY NUMBER OF LIBRARY STRUCTURES AND USE THE SUPPLIED REFLECTIONS
+//    std::string library_path = "./data/RNA_test_structures/file_names.txt";
+//    Library lib = Library(library_path, "./data/RNA_test_structures/PDB Files/", true, ".ent");
+//
+//    std::cout << "Iterating through library" << std::endl;
+//    std::cout << "0/" << lib.m_library.size() << std::endl;
+//    int i = 0;
+//    for (LibraryItem& library_item: lib.m_library) {
+//
+//        std::cout << "\b\b\b\b" <<  i << "/" << lib.m_library.size();
+//        i++;
+//        std::pair<clipper::MiniMol, clipper::Xmap<float>*> sugars = library_item.model_pair;
+//        Density dens;
+//        Density::PixelMap map = dens.extract_data(*sugars.second);
+//
+//        Model model(sugars.second);
+//        model.m_model = sugars.first;
+//
+//        Gradient grad(map);
+//        Gradient::Block_list blocks = grad.calculate_histograms(model, *sugars.second);
+//
+//        std::cout << "Created blocks with size " << blocks.size() << std::endl;
+//
+//        std::string file_name = library_item.get_pdb_code() + "_";
+//        grad.write_histogram_data_auto(blocks, "./debug/full_histogram_data_sugars", file_name);
+//
+//    }
+//    std::cout << std::endl;
+///   END
 
-    Model model(&dens.xmap);
-    model.load_model("./data/1hr2.pdb");
-
-    grad.assign_model_to_blocks(model, blocks);
-
-    Gradient::Block_list filtered_block_list = grad.filter_blocks(blocks, 1);
-
-    grad.calculate_histograms(filtered_block_list);
-
-    grad.write_histogram_data_auto(filtered_block_list, "./debug/histogram_data_no_sugars/", "1hr2_");
-
-    std::cout << "Block list size is " << filtered_block_list.size() << " out of " << (blocks.size() * blocks[0].size() * blocks[0][0].size()) << std::endl;
-
-
-//// CODE TO RUN LIBRARY ANALYSIS AND GENERATE HoG DATASET
-//    std::string library_path = "./data/rebuilt_filenames.txt";
-//    Library lib = Library(library_path);
+//// CODE TO RUN LIBRARY ANALYSIS ON BIG DATASET AND GENERATE HoG DATASET - UNFINISHED
+//    std::string library_path = "./data/RNA_test_structures/file_names.txt";
+//    Library lib = Library(library_path, "./data/RNA_test_structures/PDB Files/", false, ".ent");
 //
 //    for (LibraryItem library_item: lib.m_library) {
 //        for (int i = 0; i < library_item.m_density.size(); i++) {
@@ -569,7 +698,43 @@ int main() {
 //            m_polymer.insert(sugars.first);
 //            monomer_model.insert(m_polymer);
 //
-//            Model model(sugars.second);
+//            Model model(&sugars.second);
+//            model.m_model = monomer_model;
+//
+//            Gradient grad(map);
+////            grad.calculate_gradient();
+//            Gradient::Block_list blocks = grad.calculate_histograms(model, sugars.second);
+//
+//            std::string file_name = library_item.get_pdb_code() + "_SI_" + std::to_string(i) + "_";
+//            grad.write_histogram_data(blocks, file_name, std::string("./debug/full_histogram_data_sugars/"));
+//
+//        }
+//
+//    }
+//// END
+
+
+
+//// CODE TO RUN LIBRARY ANALYSIS AND GENERATE HoG DATASET
+//    std::string library_path = "./data/rebuilt_filenames.txt";
+//    Library lib = Library(library_path, false);
+//
+//    for (LibraryItem library_item: lib.m_library) {
+//        for (int i = 0; i < library_item.m_density.size(); i++) {
+//
+//            std::pair<clipper::MMonomer, clipper::Xmap<float>> sugars = library_item.m_density[i];
+//
+//            Density dens;
+//
+//            Density::PixelMap map = dens.extract_data(sugars.second);
+//
+//            clipper::MiniMol monomer_model;
+//            clipper::MPolymer m_polymer;
+//
+//            m_polymer.insert(sugars.first);
+//            monomer_model.insert(m_polymer);
+//
+//            Model model(&sugars.second);
 //            model.m_model = monomer_model;
 //
 //            Gradient grad(map);

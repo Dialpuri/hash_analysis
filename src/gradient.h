@@ -141,6 +141,7 @@ public:
     //!
     Block_list filter_blocks(Gradient::Blocks &blocks, int atom_limit);
 
+
 private:
     Density::PixelMap& m_image;
     GradientMap m_gradient_map;
