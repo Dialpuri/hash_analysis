@@ -14,6 +14,8 @@
 #include "/opt/xtal/ccp4-8.0/include/clipper/clipper-contrib.h"
 #include "/opt/xtal/ccp4-8.0/include/clipper/clipper-minimol.h"
 #include "/opt/xtal/ccp4-8.0/include/clipper/clipper-ccp4.h"
+#include "/opt/xtal/ccp4-8.0/include/clipper/core/map_interp.h"
+
 #include "vec3.h"
 #include "matrix.h"
 

@@ -17,9 +17,9 @@ def main():
     plt.ylabel("Magnitude")
     plt.show()
 
-def main_2d():
+def main_2d_sugars():
 
-    for csv in tqdm(os.scandir("./debug/histogram_data/2d"), total=len(os.listdir("./debug/histogram_data/2d"))):
+    for csv in tqdm(os.scandir("./debug/histogram_data_sugars/2d"), total=len(os.listdir("./debug/histogram_data_sugars/2d"))):
         df_1 = pd.read_csv(csv.path)
         df_1 = df_1[df_1['Theta'] != 0]
 
@@ -30,9 +30,27 @@ def main_2d():
         plt.colorbar()
         # plt.savefig("./debug/theta_psi_hist.png")
         plt.gca().set_aspect('equal')
-        plt.savefig(os.path.join("./debug/histogram_data/2d_images", csv.name.replace(".csv",".png")), dpi = 200)
+        plt.savefig(os.path.join("./debug/histogram_data_sugars/2d_images", csv.name.replace(".csv",".png")), dpi = 200)
+        plt.cla()
+        plt.clf()
+
+
+def main_2d_non_sugars():
+
+    for csv in tqdm(os.scandir("./debug/histogram_data_no_sugars/2d"), total=len(os.listdir("./debug/histogram_data_no_sugars/2d"))):
+        df_1 = pd.read_csv(csv.path)
+        df_1 = df_1[df_1['Theta'] != 0]
+
+        (h, xedges, yedges, image) = plt.hist2d(df_1["Theta"], df_1["Psi"], bins=(9,9), cmap="gist_heat_r")
+        print(h, xedges, yedges)
+        plt.xlabel("Theta / °")
+        plt.ylabel("Psi / °")
+        plt.colorbar()
+        # plt.savefig("./debug/theta_psi_hist.png")
+        plt.gca().set_aspect('equal')
+        plt.savefig(os.path.join("./debug/histogram_data_no_sugars/2d_images", csv.name.replace(".csv",".png")), dpi = 200)
         plt.cla()
         plt.clf()
 
 if __name__ == "__main__":
-    main_2d()
+    main_2d_non_sugars()

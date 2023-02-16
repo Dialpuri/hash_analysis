@@ -522,23 +522,17 @@ Density::PixelMap Density::difference_of_gaussian(Density::PixelMap &top, Densit
     return difference;
 }
 
-std::pair<Density::PixelMap, std::string>
+Density::LabelledPixelMap
 Density::get_random_position(clipper::MiniMol &mol, clipper::Xmap<float> *xmap) {
 
 //    Get random position
 //    Check the model
 
-    std::cout << xmap->cell().format() << std::endl;
+    LabelledPixelMap return_pixel_map ;
 
     float a = xmap->cell().a();
     float b = xmap->cell().b();
     float c = xmap->cell().c();
-
-    float nu = xmap->grid_sampling().nu();
-    float nv = xmap->grid_sampling().nv();
-    float nw = xmap->grid_sampling().nw();
-
-    float grid_spacing = a/nu;
 
     std::mt19937 prng{ std::random_device{}() };
     static std::uniform_real_distribution<> dis_a (0,a);
@@ -548,48 +542,182 @@ Density::get_random_position(clipper::MiniMol &mol, clipper::Xmap<float> *xmap) 
     float random_u = dis_a(prng);
     float random_v = dis_b(prng);
     float random_w = dis_c(prng);
-
-    random_u = 20;
-    random_v = 20;
-    random_w = 0;
-
-    clipper::Coord_orth point_1 = clipper::Coord_orth(a,b,c-1);
-    clipper::Coord_orth point_2 = clipper::Coord_orth(a,b,1);
-
-    clipper::Coord_frac cf = point_1.coord_frac(xmap->cell());
-
-    clipper::Coord_frac cf2 = point_2.coord_frac(xmap->cell());
-
-    clipper::Coord_grid cg1 = cf.coord_grid(xmap->grid_sampling());
-    std::cout << xmap->get_data(cg1) << std::endl;
-
-    clipper::Coord_grid cg2 = cf2.coord_grid(xmap->grid_sampling());
-    std::cout << xmap->get_data(cg2) << std::endl;
-    std::cout << cg1.format() << std::endl;
-    std::cout << cg2.format() << std::endl;
-
-    float x_1 = xmap->interp<clipper::Interp_nearest>(point_1.coord_frac(xmap->cell()));
-    float x_2 = xmap->interp<clipper::Interp_nearest>(point_2.coord_frac(xmap->cell()));
-
-//    std::cout << x_1 << " " << x_2 << std::endl;
-
-//    for (float i = random_u - 4; i < random_u + 4; i+=grid_spacing) {
-//        for (float j = random_v - 4; j < random_u + 4; j+=grid_spacing) {
-//            for (float k = random_w - 4; k < random_w + 4; k+=grid_spacing) {
-//                clipper::Coord_frac point = clipper::Coord_frac(i, j, k);
 //
-//                float x = xmap->interp<clipper::Interp_cubic>(point);
-//                std::cout << i << " " << j << " " << k << " " << x << std::endl;
-//            }
-//        }
-//    }
+//    clipper::ftype32 random_u = 20;
+//    clipper::ftype32 random_v = 20;
+//    clipper::ftype32 random_w = 0;
 
+    clipper::Atom_list atom_list = mol.model().atom_list();
 
-    std::cout << "Random point selected is " << random_u << " " << random_v << " " << random_w << std::endl;
+    int x_index = 0;
+    for (int i = -4; i < 4; i++) {
+        int y_index = 0;
+        for (int j = -4; j < 4; j++) {
+            int z_index = 0;
+            for (int k = -4; k < 4; k++) {
+                bool found_sugar = false;
 
-    Density::PixelMap map;
-    return std::make_pair(map, "TEST");
+                clipper::Coord_orth point = clipper::Coord_orth(random_u + i, random_v + j, random_w + k);
+                clipper::Coord_frac point_frac = point.coord_frac(xmap->cell());
+                PixelData data = PixelData(xmap->interp<clipper::Interp_nearest>(point_frac), point_frac.u(), point_frac.v(), point_frac.w());
+
+                for (int atom_index = 0; atom_index < atom_list.size(); atom_index++) {
+
+                    clipper::Coord_orth atom_position = atom_list[atom_index].coord_orth();
+
+                    float distance = abs(clipper::Coord_orth::length(atom_position, point));
+
+                    if (distance < 1) {
+                        std::cout << point.format() << atom_position.format() << " " << distance << std::endl;
+                        return_pixel_map[x_index][y_index][z_index] = std::make_pair(data, atom_list[atom_index].element());
+                        found_sugar = true;
+                        break;
+                    }
+                }
+
+                if (!found_sugar) {
+                    return_pixel_map[x_index][y_index][z_index] = std::make_pair(data, "X");
+                }
+                z_index++;
+            }
+            y_index++;
+        }
+        x_index++;
+    }
+
+    return return_pixel_map;
 }
+
+
+std::vector<Density::LabelledPixelMap>
+Density::get_all_positions(clipper::MiniMol &mol, clipper::Xmap<float> *xmap, std::string pdb_code,
+                           bool write_every_step) {
+
+//    Get random position
+//    Check the model
+
+    int box_size = 32;
+    int box_lower = -(box_size/2);
+    int box_upper = box_size/2;
+
+    float a = xmap->cell().a();
+    float b = xmap->cell().b();
+    float c = xmap->cell().c();
+
+    clipper::Atom_list atom_list = mol.model().atom_list();
+    clipper::Xmap_base::Map_reference_coord i0, iu, iv, iw, iend;
+
+    i0 = clipper::Xmap_base::Map_reference_coord(*xmap, clipper::Coord_orth(0,0,0).coord_frac(xmap->cell()).coord_grid(xmap->grid_sampling()));
+    iend = clipper::Xmap_base::Map_reference_coord(*xmap, clipper::Coord_orth(a,b,c).coord_frac(xmap->cell()).coord_grid(xmap->grid_sampling()));
+
+    std::vector<LabelledPixelMap> return_vector;
+
+    int index = 0;
+    for (iu = i0; iu.coord().u() <= iend.coord().u(); iu.next_u()) {
+        for (iv = iu; iv.coord().v() <= iend.coord().v(); iv.next_v()) {
+            for (iw = iv; iw.coord().w() <= iend.coord().w(); iw.next_w()) {
+
+                LabelledPixelMap return_pixel_map;
+                int x_index = 0;
+                for (int i = box_lower; i < box_upper; i++) {
+                    int y_index = 0;
+                    for (int j = box_lower; j < box_upper; j++) {
+                        int z_index = 0;
+                        for (int k = box_lower; k < box_upper; k++) {
+                            bool found_sugar = false;
+                            clipper::Coord_orth point = clipper::Coord_orth(iw.coord_orth().x() + i, iw.coord_orth().y() + j, iw.coord_orth().z() + k);
+                            clipper::Coord_frac point_frac = point.coord_frac(xmap->cell());
+                            PixelData data = PixelData(xmap->interp<clipper::Interp_nearest>(point_frac), point_frac.u(), point_frac.v(), point_frac.w());
+
+                            for (int atom_index = 0; atom_index < atom_list.size(); atom_index++) {
+
+                                clipper::Coord_orth atom_position = atom_list[atom_index].coord_orth();
+
+                                float distance = abs(clipper::Coord_orth::length(atom_position, point));
+
+                                if (distance < 1) {
+//                                    std::cout << point.format() << atom_position.format() << " " << distance << std::endl;
+                                    return_pixel_map[x_index][y_index][z_index] = std::make_pair(data, atom_list[atom_index].element().trim());
+                                    found_sugar = true;
+                                    break;
+                                }
+                            }
+
+                            if (!found_sugar) {
+                                return_pixel_map[x_index][y_index][z_index] = std::make_pair(data, "X");
+                            }
+                            z_index++;
+                        }
+                        y_index++;
+                    }
+                    x_index++;
+                }
+
+
+                if (write_every_step) {
+                    std::string path = "./debug/32x32x32_points";
+
+                    write_one_labelled_pixel_map(return_pixel_map, path, pdb_code, index);
+                }
+                else {
+                    return_vector.push_back(return_pixel_map);
+                }
+
+                index++;
+
+                iw.next_w();
+                iw.next_w();
+                iw.next_w();
+                iw.next_w();
+                iw.next_w();
+                iw.next_w();
+                iw.next_w();
+            }
+            iv.next_v();
+            iv.next_v();
+            iv.next_v();
+            iv.next_v();
+            iv.next_v();
+            iv.next_v();
+            iv.next_v();
+        }
+        iu.next_u();
+        iu.next_u();
+        iu.next_u();
+        iu.next_u();
+        iu.next_u();
+        iu.next_u();
+        iu.next_u();
+    }
+
+    return return_vector;
+}
+
+
+
+void Density::write_labelled_pixel_map(std::vector<LabelledPixelMap> &map, std::string path, std::string file_name) {
+
+    for (int i = 0; i < map.size(); i++) {
+        write_one_labelled_pixel_map(map[i], path, file_name, i);
+    }
+}
+
+void Density::write_one_labelled_pixel_map(Density::LabelledPixelMap &map, std::string path, std::string file_name,
+                                           int index) {
+    std::ofstream output_file;
+    std::string output_file_name = path + "/" + file_name + "_" + std::to_string(index) + ".csv";
+    output_file.open(output_file_name);
+
+    for (int x = 0; x < map.size(); x++) {
+        for (int y = 0; y < map[x].size(); y++) {
+            for (int z = 0; z < map[x][y].size(); z++) {
+                output_file << x << "," << y << "," << z << "," << map[x][y][z].first.m_data << "," << map[x][y][z].second << "\n";
+            }
+        }
+    }
+    output_file.close();
+}
+
 
 class Finder {
 public:
@@ -608,19 +736,23 @@ int main() {
 
     ///CODE TO RUN RANDOM POSITION ANALYSIS AND CLASSIFICATION
 
-    std::string library_path = "./data/RNA_test_structures/file_names_test.txt";
-    Library lib = Library(library_path, "./data/RNA_test_structures/PDB Files/", true, ".ent");
+    std::string library_path = "./data/DNA_test_structures/file_list.txt";
+    Library lib = Library(library_path, "./data/DNA_test_structures/PDB_Files/", true, ".pdb");
 
-    for (int i = 0; i < lib.m_library.size(); i++) {
-        Density dens = Density();
-        std::pair<Density::PixelMap, std::string> classified_block = dens.get_random_position(
-                lib.m_library[i].model_pair.first, &lib.m_library[i].m_xmap);
-
-    }
-
+//    std::cout << "0/" << lib.m_library.size();
+//    for (int i = 0; i < lib.m_library.size(); i++) {
+//        std::cout << "\b\b\b\b\b\b" << i+1 << "/" << lib.m_library.size() << std::flush;
+//        Density dens = Density();
+//
+//        std::vector<Density::LabelledPixelMap> map_vector = dens.get_all_positions(lib.m_library[i].model_pair.first, &lib.m_library[i].m_xmap);
+//
+//        std::string pdb_code = lib.m_library[i].m_pdb_code;
+//        std::string path = "./debug/32x32x32_points";
+//
+//        dens.write_labelled_pixel_map(map_vector, path, pdb_code);
+//    }
+//    std::cout << std::endl;
     ///END
-
-
 
 //    Density dens;
 //    dens.load_file("./data/1hr2_phases.mtz");

@@ -20,7 +20,7 @@
 class PixelData {
 public:
 
-    PixelData();
+    PixelData() {};
     PixelData(float data, float u, float v, float w): m_data(data), m_u(u), m_v(v), m_w(w) {}
     PixelData(float data, float u, float v, float w, float x, float y, float z): m_data(data), m_u(u), m_v(v), m_w(w), m_x(x), m_y(y), m_z(z) {}
 
@@ -119,6 +119,8 @@ public:
     friend class Model;
     friend class Gradient;
     typedef std::vector<std::vector<std::vector<PixelData>>> PixelMap;
+    typedef std::array<std::array<std::array<std::pair<PixelData, clipper::String>, 32>, 32>, 32> LabelledPixelMap;
+
     Density() {}
 
     Density(const clipper::Xmap<float>* xmap, clipper::MiniMol& mol): m_xmap_ptr(xmap), m_mol(mol) {};
@@ -180,8 +182,30 @@ public:
     //! Use m_xmap_ptr and m_mol to get a random position and classify it (sugar, base, phosphate, calpha, sidechain or none).
     //! Returns a pair which contains a box (PixelMap) and the classification result (as shown above).
     //!
-    std::pair<Density::PixelMap, std::string> get_random_position(clipper::MiniMol &mol, clipper::Xmap<float> *xmap);
+    LabelledPixelMap get_random_position(clipper::MiniMol &mol, clipper::Xmap<float> *xmap);
 
+    //!
+    //! \param mol
+    //! \param xmap
+    //! \return std::vector<LabelledPixelMap>
+    //!
+    //! Take in a MiniMol and Xmap to iterate through the grid points and returns the pixel map with a classification of what atom is nearby (within 1 Angstrom)
+    //!
+    std::vector<Density::LabelledPixelMap>
+    get_all_positions(clipper::MiniMol &mol, clipper::Xmap<float> *xmap, std::string pdb_code,
+                      bool write_every_step);
+
+    //!
+    //! \param map
+    //! \param path
+    //! \param file_name
+    //!
+    //! Takes a list of all LabelledPixelMap and writes each map to an individual file
+    //!
+    void write_labelled_pixel_map(std::vector<LabelledPixelMap>& map, std::string path, std::string file_name);
+
+    void write_one_labelled_pixel_map(Density::LabelledPixelMap &map, std::string path, std::string file_name,
+                                      int index);
 
     std::vector<PixelData> difference_of_gaussian(std::vector<PixelData>& top, std::vector<PixelData>& bottom);
     PixelMap difference_of_gaussian(PixelMap& top, PixelMap& bottom);

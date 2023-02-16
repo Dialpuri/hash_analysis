@@ -40,10 +40,10 @@ public:
 
     void load_reflections(clipper::MiniMol &mol);
 
-    const std::string m_pdb_base_dir;
+    std::string m_pdb_base_dir;
     clipper::Xmap<float> m_xmap;
-private:
     std::string m_pdb_code;
+private:
 
     std::string m_pdb_file_path;
     std::string m_pdb_file_ending;
@@ -57,10 +57,10 @@ public:
     Library(std::string library_file_path, std::string pdb_base_dir, bool use_experimental_data,
             std::string pdb_file_ending);
 
-    std::vector<LibraryItem> read_library_item();
+    std::vector<LibraryItem *> read_library_item();
 
     void combine_density();
-    std::vector <LibraryItem> m_library;
+    std::vector <LibraryItem*> m_library;
 
 private:
     std::string m_library_path;
